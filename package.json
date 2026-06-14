@@ -1,0 +1,17 @@
+{
+  "name": "telegram_bot_lucia",
+  "version": "1.0.0",
+  "description": "Telegram Bot on Cloudflare Workers",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com-NekoZ410:NekoZ410/telegram_bot_lucia"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

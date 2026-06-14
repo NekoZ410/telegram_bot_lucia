@@ -1,0 +1,7 @@
+name = "telegram-bot-lucia"
+main = "src/index.js"
+compatibility_date = "2024-03-20"
+
+[vars]
+# Môi trường khai báo biến. Token thực tế sẽ được thêm qua lệnh:
+# wrangler secret put TELEGRAM_BOT_TOKEN
