@@ -1,0 +1,17 @@
+# os
+.DS_Store
+Thumbs.db
+
+# env
+.env
+.dev.vars
+
+# node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# cloudflare worker/wrangler
+.wrangler/
+dist/
+worker/
