@@ -73,7 +73,7 @@ export default {
                 }
 
                 // detecting private groups/pages or professional profiles
-                if (finalUrl.includes("facebook.com/login") || finalUrl.includes("facebook.com/permalink.php")) {
+                if (finalUrl.includes("facebook.com/login")) {
                     return "❌ Không thể lấy được URL gốc do nguồn cấp là nhóm kín, trang cá nhân chuyên nghiệp hoặc lỗi khác.\nThử lại với URL từ tính năng Chia sẻ của Facebook thay vì copy link trực tiếp từ thanh địa chỉ.";
                 }
 
