@@ -16,35 +16,25 @@ export default {
             try {
                 const response = await fetch(inputUrl, {
                     method: "GET",
-                    headers: { "User-Agent": "curl/7.81.0", Accept: "*/*" },
-                    redirect: "manual",
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+                        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+                    },
+                    redirect: "follow",
                 });
 
                 // fetching finalUrl
-                let finalUrl = "";
-                if (response.status >= 300 && response.status < 400) {
-                    const location = response.headers.get("Location");
-                    if (location) {
-                        if (location.includes("/login/") && location.includes("next=")) {
-                            try {
-                                const urlObj = new URL(location, "https://www.facebook.com");
-                                const nextParam = urlObj.searchParams.get("next");
-                                if (nextParam) {
-                                    finalUrl = decodeURIComponent(nextParam);
-                                } else {
-                                    finalUrl = location;
-                                }
-                            } catch (e) {
-                                finalUrl = location;
-                            }
-                        } else {
-                            finalUrl = location;
+                let finalUrl = response.url;
+                if (finalUrl.includes("/login/") && finalUrl.includes("next=")) {
+                    try {
+                        const urlObj = new URL(finalUrl);
+                        const nextParam = urlObj.searchParams.get("next");
+                        if (nextParam) {
+                            finalUrl = decodeURIComponent(nextParam);
                         }
-                    }
-                }
-
-                // extracting og:url
-                if (!finalUrl) {
+                    } catch (e) {}
+                } else {
                     const html = await response.text();
                     const ogUrlMatch =
                         html.match(/<meta[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["']/i) ||
@@ -53,23 +43,33 @@ export default {
                         finalUrl = ogUrlMatch[1].replace(/&amp;/g, "&");
                     }
                 }
-                if (!finalUrl) return { text: "❌ Không tìm thấy thẻ <code>og:url</code> trong trang đích.", url: null };
+                if (!finalUrl) return { text: "❌ Không tìm thấy URL hợp lệ.", url: null };
+
+                // recreating canonical url when encountered professional profile
+                try {
+                    const parsedUrl = new URL(finalUrl);
+                    if (parsedUrl.pathname.includes("story.php") || parsedUrl.pathname.includes("permalink.php")) {
+                        const storyId = parsedUrl.searchParams.get("story_fbid");
+                        const pageId = parsedUrl.searchParams.get("id");
+
+                        if (storyId && pageId) {
+                            finalUrl = `https://www.facebook.com/${pageId}/posts/${storyId}/`;
+                        }
+                    }
+                } catch (e) {}
 
                 // processing finalUrl
                 try {
+                    // decoding url-encoded characters
                     finalUrl = decodeURIComponent(finalUrl);
-                    // cleaning tracking parameters
                     try {
+                        // cleaning tracking parameters
                         const parsedUrl = new URL(finalUrl);
                         parsedUrl.searchParams.delete("rdid");
                         parsedUrl.searchParams.delete("share_url");
                         finalUrl = parsedUrl.toString();
-                    } catch (err) {
-                        // if parsing fails, do nothing
-                    }
-                } catch (e) {
-                    // if cleaning fails, do nothing
-                }
+                    } catch (err) {}
+                } catch (e) {}
 
                 // detecting private groups/pages or professional profiles
                 if (finalUrl.includes("facebook.com/login")) {
@@ -80,10 +80,7 @@ export default {
                 }
 
                 const prefix = userDisplayContext ? `${userDisplayContext}\n` : "";
-                return {
-                    text: `${prefix}✅ <b>URL Gốc:</b>\n${finalUrl}`,
-                    url: finalUrl,
-                };
+                return { text: `${prefix}✅ <b>URL Gốc:</b>\n${finalUrl}`, url: finalUrl };
             } catch (error) {
                 return "❌ Đã xảy ra lỗi mạng khi kết nối đến Facebook."; // if network error
             }
