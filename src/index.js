@@ -53,12 +53,11 @@ export default {
                         finalUrl = ogUrlMatch[1].replace(/&amp;/g, "&");
                     }
                 }
-                if (!finalUrl) return "❌ Không tìm thấy thẻ <code>og:url</code> trong trang đích."; // if not found og:url
+                if (!finalUrl) return { text: "❌ Không tìm thấy thẻ <code>og:url</code> trong trang đích.", url: null };
 
                 // processing finalUrl
                 try {
-                    finalUrl = decodeURIComponent(finalUrl); // decode url-encoded characters
-
+                    finalUrl = decodeURIComponent(finalUrl);
                     // cleaning tracking parameters
                     try {
                         const parsedUrl = new URL(finalUrl);
@@ -66,19 +65,25 @@ export default {
                         parsedUrl.searchParams.delete("share_url");
                         finalUrl = parsedUrl.toString();
                     } catch (err) {
-                        // if cleaning fails, keep original finalUrl
+                        // if parsing fails, do nothing
                     }
                 } catch (e) {
-                    // if decoding fails, keep original finalUrl
+                    // if cleaning fails, do nothing
                 }
 
                 // detecting private groups/pages or professional profiles
                 if (finalUrl.includes("facebook.com/login")) {
-                    return "❌ Không thể lấy được URL gốc do nguồn cấp là nhóm kín, trang cá nhân chuyên nghiệp hoặc lỗi khác.\nThử lại với URL từ tính năng Chia sẻ của Facebook thay vì copy link trực tiếp từ thanh địa chỉ.";
+                    return {
+                        text: "❌ Không thể lấy được URL gốc do nguồn cấp là nhóm kín, trang cá nhân chuyên nghiệp hoặc lỗi khác.\nThử lại với URL từ tính năng Chia sẻ của Facebook thay vì copy link trực tiếp từ thanh địa chỉ.",
+                        url: null,
+                    };
                 }
 
                 const prefix = userDisplayContext ? `${userDisplayContext}\n` : "";
-                return `${prefix}✅ <b>URL Gốc:</b>\n${finalUrl}`;
+                return {
+                    text: `${prefix}✅ <b>URL Gốc:</b>\n${finalUrl}`,
+                    url: finalUrl,
+                };
             } catch (error) {
                 return "❌ Đã xảy ra lỗi mạng khi kết nối đến Facebook."; // if network error
             }
@@ -172,16 +177,23 @@ export default {
                         let userDisplay = `🙍‍♂️ Phản hồi cho: ${nameStr}`;
                         if (username) userDisplay += ` - ${username}`;
 
-                        const replyText = await fetchFacebookOgUrl(matchUrl[0], userDisplay);
+                        const result = await fetchFacebookOgUrl(matchUrl[0], userDisplay);
 
                         ctx.waitUntil(
                             (async () => {
                                 const sendPayload = {
                                     chat_id: chatId,
-                                    text: replyText,
+                                    text: result.text,
                                     parse_mode: "HTML",
                                     link_preview_options: { prefer_large_media: true },
+                                    reply_parameters: { message_id: message.message_id },
                                 };
+
+                                if (result.url) {
+                                    sendPayload.link_preview_options.url = result.url;
+                                    sendPayload.link_preview_options.show_above_text = true;
+                                }
+
                                 if (threadId) sendPayload.message_thread_id = threadId;
                                 await callTelegramApi("sendMessage", sendPayload);
                             })(),
@@ -193,6 +205,7 @@ export default {
                             chat_id: chatId,
                             text: "❌ Link không hợp lệ. Vui lòng cung cấp link Facebook đúng định dạng.",
                             parse_mode: "HTML",
+                            reply_parameters: { message_id: message.message_id },
                         };
                         if (threadId) payload.message_thread_id = threadId;
                         return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json" } });
@@ -201,8 +214,9 @@ export default {
                     const payload = {
                         method: "sendMessage",
                         chat_id: chatId,
-                        text: "⚠️ Vui lòng sử dụng cú pháp:\n<code>/fbfix &lt;facebookUrl&gt;</code>\n<code>/fbfix@nekoz410_lucia_bot &lt;facebookUrl&gt;</code>",
+                        text: "⚠️ Vui lòng sử dụng cú pháp:\n<code>/fbfix &lt;facebookUrl&gt;</code>\n<code>/fbfix@@uruha_lucia_bot &lt;facebookUrl&gt;</code>",
                         parse_mode: "HTML",
+                        reply_parameters: { message_id: message.message_id },
                     };
                     if (threadId) payload.message_thread_id = threadId;
                     return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json" } });
