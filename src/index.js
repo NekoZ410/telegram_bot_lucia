@@ -11,7 +11,17 @@ export default {
             });
         };
 
-        // fbfix: logic
+        // helper: delete error messages
+        const deleteErrorMessages = async (chatId, botMsgId, userMsgId) => {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+            await callTelegramApi("deleteMessages", {
+                chat_id: chatId,
+                message_ids: [botMsgId, userMsgId],
+            });
+        };
+
+        // fbfix: fetch facebook og url
         const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             try {
                 const response = await fetch(inputUrl, {
@@ -178,7 +188,7 @@ export default {
 
                         ctx.waitUntil(
                             (async () => {
-                                const sendPayload = {
+                                const payload = {
                                     chat_id: chatId,
                                     text: result.text,
                                     parse_mode: "HTML",
@@ -187,39 +197,59 @@ export default {
                                 };
 
                                 if (result.url) {
-                                    sendPayload.link_preview_options.url = result.url;
-                                    sendPayload.link_preview_options.show_above_text = true;
+                                    payload.link_preview_options.url = result.url;
+                                    payload.link_preview_options.show_above_text = true;
                                 }
 
-                                if (threadId) sendPayload.message_thread_id = threadId;
-                                await callTelegramApi("sendMessage", sendPayload);
+                                if (threadId) payload.message_thread_id = threadId;
+
+                                let tgResponse = await callTelegramApi("sendMessage", payload);
+                                if (tgResponse && typeof tgResponse.json === "function") tgResponse = await tgResponse.json();
+
+                                if (!result.url && tgResponse && tgResponse.ok) await deleteErrorMessages(chatId, tgResponse.result.message_id, message.message_id);
                             })(),
                         );
                         return new Response("OK", { status: 200 });
                     } else {
-                        const payload = {
-                            method: "sendMessage",
-                            chat_id: chatId,
-                            text: "❌ Link không hợp lệ. Vui lòng cung cấp link Facebook đúng định dạng.",
-                            parse_mode: "HTML",
-                            reply_parameters: { message_id: message.message_id },
-                        };
-                        if (threadId) payload.message_thread_id = threadId;
-                        return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json" } });
+                        ctx.waitUntil(
+                            (async () => {
+                                const payload = {
+                                    chat_id: chatId,
+                                    text: "❌ Link không hợp lệ. Vui lòng cung cấp link Facebook đúng định dạng.",
+                                    parse_mode: "HTML",
+                                    reply_parameters: { message_id: message.message_id },
+                                };
+
+                                if (threadId) payload.message_thread_id = threadId;
+
+                                let tgResponse = await callTelegramApi("sendMessage", payload);
+                                if (tgResponse && typeof tgResponse.json === "function") tgResponse = await tgResponse.json();
+
+                                if (tgResponse && tgResponse.ok) await deleteErrorMessages(chatId, tgResponse.result.message_id, message.message_id);
+                            })(),
+                        );
+                        return new Response("OK", { status: 200 });
                     }
                 } else {
-                    const payload = {
-                        method: "sendMessage",
-                        chat_id: chatId,
-                        text: "⚠️ Vui lòng sử dụng cú pháp:\n<code>/fbfix &lt;facebookUrl&gt;</code>\n<code>/fbfix@@uruha_lucia_bot &lt;facebookUrl&gt;</code>",
-                        parse_mode: "HTML",
-                        reply_parameters: { message_id: message.message_id },
-                    };
-                    if (threadId) payload.message_thread_id = threadId;
-                    return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json" } });
+                    ctx.waitUntil(
+                        (async () => {
+                            const payload = {
+                                chat_id: chatId,
+                                text: "⚠️ Vui lòng sử dụng cú pháp:\n<code>/fbfix &lt;facebookUrl&gt;</code>\n<code>/fbfix@nekoz410_lucia_bot &lt;facebookUrl&gt;</code>",
+                                parse_mode: "HTML",
+                                reply_parameters: { message_id: message.message_id },
+                            };
+                            if (threadId) payload.message_thread_id = threadId;
+
+                            let tgResponse = await callTelegramApi("sendMessage", payload);
+                            if (tgResponse && typeof tgResponse.json === "function") tgResponse = await tgResponse.json();
+
+                            if (tgResponse && tgResponse.ok) await deleteErrorMessages(chatId, tgResponse.result.message_id, message.message_id);
+                        })(),
+                    );
+                    return new Response("OK", { status: 200 });
                 }
             }
-
             return new Response("OK", { status: 200 });
         } catch (error) {
             console.error("Error parsing webhook:", error);
