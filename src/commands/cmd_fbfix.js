@@ -1,0 +1,82 @@
+import { fetchFacebookOgUrl } from "../utils/facebook.js";
+import { callTelegramApi, autoDelErrMsg } from "../utils/telegram.js";
+
+export async function handleFbfix({ message, args, threadId, chatId, env, ctx }) {
+    if (args) {
+        const urlRegex = /(?:https?:\/\/)?(?:www\.)?facebook\.com\/[^\s]+/i;
+        const matchUrl = args.match(urlRegex);
+
+        if (matchUrl) {
+            const firstName = message.from.first_name || "";
+            const lastName = message.from.last_name || "";
+            const username = message.from.username ? `@${message.from.username}` : "<username not set>";
+
+            const nameStr = `${firstName} ${lastName}`.trim() || "Người dùng";
+            let userDisplay = `🙍‍♂️ Phản hồi cho: ${nameStr}`;
+            if (username) userDisplay += ` - ${username}`;
+
+            const result = await fetchFacebookOgUrl(matchUrl[0], userDisplay);
+
+            ctx.waitUntil(
+                (async () => {
+                    const payload = {
+                        chat_id: chatId,
+                        text: result.text,
+                        parse_mode: "HTML",
+                        link_preview_options: { prefer_large_media: true },
+                        reply_parameters: { message_id: message.message_id },
+                    };
+
+                    if (result.url) {
+                        payload.link_preview_options.url = result.url;
+                        payload.link_preview_options.show_above_text = true;
+                    }
+
+                    if (threadId) payload.message_thread_id = threadId;
+
+                    let tgResponse = await callTelegramApi("sendMessage", payload, env);
+                    if (tgResponse && typeof tgResponse.json === "function") tgResponse = await tgResponse.json();
+
+                    if (!result.url && tgResponse && tgResponse.ok) await autoDelErrMsg(chatId, tgResponse.result.message_id, message.message_id, env);
+                })(),
+            );
+            return new Response("OK", { status: 200 });
+        } else {
+            ctx.waitUntil(
+                (async () => {
+                    const payload = {
+                        chat_id: chatId,
+                        text: "❌ Link không hợp lệ. Vui lòng cung cấp link Facebook đúng định dạng.",
+                        parse_mode: "HTML",
+                        reply_parameters: { message_id: message.message_id },
+                    };
+                    if (threadId) payload.message_thread_id = threadId;
+
+                    let tgResponse = await callTelegramApi("sendMessage", payload, env);
+                    if (tgResponse && typeof tgResponse.json === "function") tgResponse = await tgResponse.json();
+
+                    if (tgResponse && tgResponse.ok) await autoDelErrMsg(chatId, tgResponse.result.message_id, message.message_id, env);
+                })(),
+            );
+            return new Response("OK", { status: 200 });
+        }
+    } else {
+        ctx.waitUntil(
+            (async () => {
+                const payload = {
+                    chat_id: chatId,
+                    text: "⚠️ Vui lòng sử dụng cú pháp:\n<code>/fbfix &lt;facebookUrl&gt;</code>\n<code>/fbfix@nekoz410_lucia_bot &lt;facebookUrl&gt;</code>",
+                    parse_mode: "HTML",
+                    reply_parameters: { message_id: message.message_id },
+                };
+                if (threadId) payload.message_thread_id = threadId;
+
+                let tgResponse = await callTelegramApi("sendMessage", payload, env);
+                if (tgResponse && typeof tgResponse.json === "function") tgResponse = await tgResponse.json();
+
+                if (tgResponse && tgResponse.ok) await autoDelErrMsg(chatId, tgResponse.result.message_id, message.message_id, env);
+            })(),
+        );
+        return new Response("OK", { status: 200 });
+    }
+}
