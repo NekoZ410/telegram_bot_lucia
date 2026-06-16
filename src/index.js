@@ -58,20 +58,20 @@ export default {
                     }
                 } catch (e) {}
 
-                // processing finalUrl
+                // cleaning tracking parameters
                 try {
-                    // decoding url-encoded characters
-                    finalUrl = decodeURIComponent(finalUrl);
-                    try {
-                        // cleaning tracking parameters
-                        const parsedUrl = new URL(finalUrl);
-                        parsedUrl.searchParams.delete("rdid");
-                        parsedUrl.searchParams.delete("share_url");
-                        finalUrl = parsedUrl.toString();
-                    } catch (err) {}
+                    const parsedUrl = new URL(finalUrl);
+                    parsedUrl.searchParams.delete("rdid");
+                    parsedUrl.searchParams.delete("share_url");
+                    finalUrl = parsedUrl.toString();
+                } catch (err) {}
+
+                // decoding url-encoded characters
+                try {
+                    finalUrl = decodeURI(finalUrl);
                 } catch (e) {}
 
-                // detecting private groups/pages or professional profiles
+                // detecting private groups/pages
                 if (finalUrl.includes("facebook.com/login")) {
                     return {
                         text: "❌ Không thể lấy được URL gốc do nguồn cấp là nhóm kín, trang cá nhân chuyên nghiệp hoặc lỗi khác.\nThử lại với URL từ tính năng Chia sẻ của Facebook thay vì copy link trực tiếp từ thanh địa chỉ.",
