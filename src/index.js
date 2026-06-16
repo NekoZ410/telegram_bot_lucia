@@ -67,9 +67,9 @@ export default {
                 } catch (err) {}
 
                 // decoding url-encoded characters
-                try {
-                    finalUrl = decodeURI(finalUrl);
-                } catch (e) {}
+                // try {
+                //     finalUrl = decodeURI(finalUrl);
+                // } catch (e) {}
 
                 // detecting private groups/pages
                 if (finalUrl.includes("facebook.com/login")) {
