@@ -22,8 +22,8 @@ export default {
             const text = message.text.trim();
 
             if (text.startsWith("/")) {
-                const BOT_USERNAME = "nekoz410_lucia_bot";
-                const regex = new RegExp(`^\\/([a-zA-Z0-9_]+)(?:@${BOT_USERNAME})?(?:\\s+(.*))?$`, "i");
+                const BOT_USERNAME = "uruha_lucia_bot";
+                const regex = new RegExp(`^\\/(\\w+)(?:@${BOT_USERNAME})?(?:\\s+(.*))?$`, "i");
                 const match = text.match(regex);
                 if (match) {
                     const command = match[1].toLowerCase();
