@@ -1,4 +1,4 @@
-import { callTelegramApi } from "../utils/telegram.js";
+import { callTelegramApi, setReaction } from "../utils/telegram.js";
 
 export async function handleInfo({ message, threadId, chatId, request, env, ctx }) {
     // ===== pre-extract due to waitUntil async =====

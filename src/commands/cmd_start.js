@@ -1,4 +1,4 @@
-import { callTelegramApi } from "../utils/telegram.js";
+import { callTelegramApi, setReaction } from "../utils/telegram.js";
 
 export async function handleStart({ env, ctx, chatId, threadId, message }) {
     // ===== reaction feedback for trigger =====
