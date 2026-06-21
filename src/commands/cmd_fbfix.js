@@ -8,17 +8,7 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
 
         if (matchUrl) {
             // ===== reaction feedback for trigger =====
-            ctx.waitUntil(
-                callTelegramApi(
-                    "setMessageReaction",
-                    {
-                        chat_id: chatId,
-                        message_id: message.message_id,
-                        reaction: [{ type: "emoji", emoji: "👌" }],
-                    },
-                    env,
-                ),
-            );
+            ctx.waitUntil(setReaction(chatId, message.message_id, "👌", env));
 
             // ===== sender info - disabled =====
             // const firstName = message.from.first_name || "";

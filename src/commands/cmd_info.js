@@ -1,7 +1,7 @@
 import { callTelegramApi } from "../utils/telegram.js";
 
 export async function handleInfo({ message, threadId, chatId, request, env, ctx }) {
-    // pre-extract due to waitUntil async
+    // ===== pre-extract due to waitUntil async =====
     const from = message.from;
     const name = `${from.first_name || ""} ${from.last_name || ""}`.trim() || "N/A";
     const username = from.username ? `@${from.username}` : "N/A";
@@ -26,6 +26,10 @@ export async function handleInfo({ message, threadId, chatId, request, env, ctx 
     const country = request.headers.get("cf-ipcountry") || "Unknown";
     const segmentC = `\n<b>Where I reside:</b>\n` + `- IP: ${ip} | Country: ${country}`;
 
+    // ===== reaction feedback for trigger =====
+    ctx.waitUntil(setReaction(chatId, message.message_id, "👌", env));
+
+    // ===== send detailed info =====
     ctx.waitUntil(
         (async () => {
             const payload = {

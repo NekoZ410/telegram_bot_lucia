@@ -20,3 +20,16 @@ export const autoDelErrMsg = async (chatId, botMsgId, userMsgId, env) => {
         env,
     );
 };
+
+// helper: set reaction
+export const setReaction = async (chatId, messageId, emoji, env) => {
+    return callTelegramApi(
+        "setMessageReaction",
+        {
+            chat_id: chatId,
+            message_id: messageId,
+            reaction: [{ type: "emoji", emoji: emoji }],
+        },
+        env,
+    );
+};
