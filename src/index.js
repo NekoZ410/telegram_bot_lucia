@@ -22,13 +22,13 @@ export default {
             const text = message.text.trim();
 
             if (text.startsWith("/")) {
-                const match = text.match(/^\/([a-zA-Z0-9_]+)(?:@[a-zA-Z0-9_]+bot)?(?:\s+(.*))?$/i);
+                const BOT_USERNAME = "nekoz410_lucia_bot";
+                const regex = new RegExp(`^\\/([a-zA-Z0-9_]+)(?:@${BOT_USERNAME})?(?:\\s+(.*))?$`, "i");
+                const match = text.match(regex);
                 if (match) {
                     const command = match[1].toLowerCase();
                     const args = match[2] ? match[2].trim() : "";
-
                     const handler = COMMAND_ROUTER[command];
-
                     if (handler) return await handler({ env, ctx, chatId, threadId, message, args, request });
                 }
             }
