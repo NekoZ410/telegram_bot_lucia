@@ -119,7 +119,7 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
         (async () => {
             const payload = {
                 chat_id: chatId,
-                text: "⚠️ Vui lòng sử dụng cú pháp:\n<code>/fbfix &lt;facebookUrl&gt;</code>\n<code>/fbfix@nekoz410_lucia_bot &lt;facebookUrl&gt;</code>\n\n<b>[Thông báo sẽ tự động xoá sau 5s.]</b>",
+                text: "⚠️ Vui lòng sử dụng cú pháp:\n<code>/fbfix &lt;facebookUrl&gt;</code>\n<code>/fbfix@uruha_lucia_bot &lt;facebookUrl&gt;</code>\n\n<b>[Thông báo sẽ tự động xoá sau 5s.]</b>",
                 parse_mode: "HTML",
                 reply_parameters: { message_id: message.message_id },
             };
