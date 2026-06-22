@@ -15,3 +15,6 @@ yarn-error.log
 .wrangler/
 dist/
 worker/
+
+# other
+*test*
