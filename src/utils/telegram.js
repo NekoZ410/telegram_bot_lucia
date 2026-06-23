@@ -8,7 +8,7 @@ export const callTelegramApi = async (method, payload, env) => {
     });
 };
 
-// helper: auto delete error messages
+// helper: auto delete messages
 export const autoDeleteMessage = async (chatId, botMsgId, userMsgId, env, delayMs = 5000) => {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     await callTelegramApi(
