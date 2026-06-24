@@ -82,36 +82,50 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
         const mediaUrls = [];
         let ogImage = null;
         if (html) {
-            let baseId = null;
-
-            // find anchor id from og:image
+            // take og:image as fallback image
             const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
             if (ogImageMatch && ogImageMatch[1]) {
                 ogImage = decodeFbEntities(ogImageMatch[1]);
-                const idMatch = ogImageMatch[1].match(/media_id=(\d+)/);
-                if (idMatch) baseId = idMatch[1];
             }
 
-            // scrape all media_id from html
-            const lookasideRegex = /media_id=(\d{14,18})/g;
-            const allIds = [];
-            let match;
-            while ((match = lookasideRegex.exec(html)) !== null) allIds.push(match[1]);
+            let validIds = [];
 
-            // if post has multiple media
-            if (allIds.length > 0) {
-                if (!baseId) baseId = allIds[0]; // if not have og:image, take the first nearest media_id
-                const basePrefix = baseId.substring(0, 5);
-                const baseLen = baseId.length;
-                const validIds = [...new Set(allIds)].filter((id) => id.length === baseLen && id.substring(0, 5) === basePrefix); // only keep ones with same prefix
+            // using smart regex first
+            const attachmentRegex = /"all_subattachments"\s*:\s*\{"nodes"\s*:\s*\[([\s\S]*?)\]\}/;
+            const attachMatch = html.match(attachmentRegex);
+            if (attachMatch) {
+                const nodeStr = attachMatch[1];
+                const idRegex = /"id"\s*:\s*"(\d{14,18})"/g;
+                let idMatch;
+                while ((idMatch = idRegex.exec(nodeStr)) !== null) {
+                    validIds.push(idMatch[1]);
+                }
+            }
 
-                // grouping valid media_ids
+            // using lookaside api then
+            if (validIds.length === 0) {
+                const lookasideRegex = /media_id=(\d{14,18})/g;
+                const allIds = [];
+                let match;
+                while ((match = lookasideRegex.exec(html)) !== null) allIds.push(match[1]);
+
+                if (allIds.length > 0) {
+                    const baseId = allIds[0];
+                    const basePrefix = baseId.substring(0, 5);
+                    const baseLen = baseId.length;
+                    validIds = [...new Set(allIds)].filter((id) => id.length === baseLen && id.substring(0, 5) === basePrefix); // only keep ones with same prefix
+                }
+            }
+
+            validIds = [...new Set(validIds)].slice(0, 10); // remove duplication and limit at first 10 images
+            // if post has multiple images
+            if (validIds.length > 0) {
                 const finalUrls = validIds.map((id) => `https://lookaside.fbsbx.com/lookaside/crawler/media/?media_id=${id}`); // using lookaside api
-                mediaUrls.push(...finalUrls.slice(0, 10)); // telegram limit 10 media per message
+                mediaUrls.push(...finalUrls);
             }
             // else, fallback to og:image
             else if (ogImage) {
-                mediaUrls.push(ogImage);
+                mediaUrls.push(ogImage); // fallback to og:image
             }
         }
 
