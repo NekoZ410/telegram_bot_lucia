@@ -1,7 +1,23 @@
 name = "telegram-bot-lucia"
 main = "src/index.js"
-compatibility_date = "2024-03-20"
+compatibility_date = "2026-03-24"
+compatibility_flags = [ "nodejs_compat" ]
 
 [vars]
-# Môi trường khai báo biến. Token thực tế sẽ được thêm qua lệnh:
-# wrangler secret put TELEGRAM_BOT_TOKEN
+# Real Telegram bot token will set via cmd: wrangler secret put TELEGRAM_BOT_TOKEN
+
+[[d1_databases]]
+binding = "telegram_bot_lucia_db"
+database_name = "telegram-bot-lucia-db"
+database_id = "b329e40d-fae5-414e-bd52-d43893142af3"
+
+[[kv_namespaces]]
+binding = "telegram_bot_lucia_kv"
+id = "0c5b65f0610f4d6997060a85bf5c36d8"
+
+[browser]
+binding = "BROWSER"
+
+# [[vpc_networks]]
+# binding = "PRIVATE_NET"
+# network_id = "cf1:network"
