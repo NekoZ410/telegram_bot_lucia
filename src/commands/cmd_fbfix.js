@@ -1,5 +1,5 @@
 import { fetchFacebookOgUrl } from "../utils/facebook.js";
-import { callTelegramApi, autoDelErrMsg, setReaction } from "../utils/telegram.js";
+import { callTelegramApi, autoDeleteMessage, setReaction } from "../utils/telegram.js";
 
 export async function handleFbfix({ env, ctx, chatId, threadId, message, args }) {
     if (args) {
@@ -94,7 +94,10 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
                     } catch (e) {
                         await setReaction(chatId, message.message_id, "👎", env); // change reaction feedback to notify fails
 
-                        const errorMsg = e.message.includes("❌") ? e.message : "❌ Lỗi không xác định khi tải nội dung. Mạng không ổn định hoặc facebook đã đổi thuật toán!";
+                        const errorMsg =
+                            e.message.includes("❌") ?
+                                e.message
+                            :   "❌ Lỗi không xác định khi tải nội dung. Mạng không ổn định hoặc facebook đã đổi thuật toán!\n\n<b>[Thông báo sẽ tự động xoá sau 5s.]</b>";
                         const payload = {
                             chat_id: chatId,
                             text: `${errorMsg}\n\n<b>[Thông báo sẽ tự động xoá sau 5s.]</b>`,
@@ -106,7 +109,10 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
                         let tgResponse = await callTelegramApi("sendMessage", payload, env);
                         if (tgResponse && typeof tgResponse.json === "function") tgResponse = await tgResponse.json();
 
-                        if (tgResponse && tgResponse.ok) await autoDelErrMsg(chatId, tgResponse.result.message_id, message.message_id, env);
+                        if (tgResponse && tgResponse.ok) {
+                            autoDeleteMessage(chatId, tgResponse.result.message_id, env, 5000);
+                            await autoDeleteMessage(chatId, message.message_id, env, 5000);
+                        }
                     }
                 })(),
             );
@@ -128,7 +134,10 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
             let tgResponse = await callTelegramApi("sendMessage", payload, env);
             if (tgResponse && typeof tgResponse.json === "function") tgResponse = await tgResponse.json();
 
-            if (tgResponse && tgResponse.ok) await autoDelErrMsg(chatId, tgResponse.result.message_id, message.message_id, env);
+            if (tgResponse && tgResponse.ok) {
+                autoDeleteMessage(chatId, tgResponse.result.message_id, env, 5000);
+                await autoDeleteMessage(chatId, message.message_id, env, 5000);
+            }
         })(),
     );
     return new Response("OK", { status: 200 });
