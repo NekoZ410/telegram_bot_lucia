@@ -206,7 +206,10 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
                 const decodedMsg = decodeFbEntities(msgMatch[1]).trim();
                 if (snippet && decodedMsg.includes(snippet)) captionCandidates.push(decodedMsg);
             }
-            if (captionCandidates.length > 0) caption = captionCandidates.reduce((a, b) => (a.length > b.length ? a : b), "");
+            if (captionCandidates.length > 0) {
+                caption = captionCandidates.reduce((a, b) => (a.length > b.length ? a : b), "");
+                caption = caption.replace(/@(?=\S)/g, "@ ").replace(/#(?=\S)/g, "# ");
+            }
 
             // get timestamp
             const timeMatch = html.match(/"creation_time":\s*(\d+)/i) || html.match(/"publish_time":\s*(\d+)/i);
