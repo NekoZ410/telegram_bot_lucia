@@ -15,6 +15,7 @@ yarn-error.log
 .wrangler/
 dist/
 worker/
+wrangler.toml
 
 # other
 *test*
