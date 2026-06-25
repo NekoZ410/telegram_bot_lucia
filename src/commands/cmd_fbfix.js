@@ -7,9 +7,6 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
         const matchUrl = args.match(urlRegex);
 
         if (matchUrl) {
-            // ===== reaction feedback for trigger =====
-            ctx.waitUntil(setReaction(chatId, message.message_id, "👌", env));
-
             // ===== sender info - disabled =====
             // const firstName = message.from.first_name || "";
             // const lastName = message.from.last_name || "";
@@ -24,6 +21,8 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
             // ===== send message based on post type =====
             ctx.waitUntil(
                 (async () => {
+                    ctx.waitUntil(setReaction(chatId, message.message_id, "👌", env)); // feedback reaction
+
                     try {
                         let userDisplay = null;
                         const result = await fetchFacebookOgUrl(matchUrl[0], userDisplay);
@@ -92,7 +91,7 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
                             if (jsonResponse && !jsonResponse.ok) throw new Error(`Telegram Error: ${jsonResponse.description}`); // if fallback fails, throw error
                         }
                     } catch (e) {
-                        await setReaction(chatId, message.message_id, "👎", env); // change reaction feedback to notify fails
+                        await setReaction(chatId, message.message_id, "😭", env); // feedback reaction
 
                         const errorMsg =
                             e.message.includes("❌") ?
@@ -108,10 +107,9 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
 
                         let tgResponse = await callTelegramApi("sendMessage", payload, env);
                         if (tgResponse && typeof tgResponse.json === "function") tgResponse = await tgResponse.json();
-
                         if (tgResponse && tgResponse.ok) {
-                            autoDeleteMessage(chatId, tgResponse.result.message_id, env, 5000);
-                            await autoDeleteMessage(chatId, message.message_id, env, 5000);
+                            ctx.waitUntil(autoDeleteMessage(chatId, tgResponse.result.message_id, env, 5000));
+                            ctx.waitUntil(autoDeleteMessage(chatId, message.message_id, env, 5000));
                         }
                     }
                 })(),
@@ -123,6 +121,8 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
     // when no args
     ctx.waitUntil(
         (async () => {
+            await setReaction(chatId, message.message_id, "👆", env); // feedback reaction
+
             const payload = {
                 chat_id: chatId,
                 text: "⚠️ Vui lòng sử dụng cú pháp:\n<code>/fbfix &lt;facebookUrl&gt;</code>\n<code>/fbfix@uruha_lucia_bot &lt;facebookUrl&gt;</code>\n\n<b>[Thông báo sẽ tự động xoá sau 5s.]</b>",
@@ -135,8 +135,8 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
             if (tgResponse && typeof tgResponse.json === "function") tgResponse = await tgResponse.json();
 
             if (tgResponse && tgResponse.ok) {
-                autoDeleteMessage(chatId, tgResponse.result.message_id, env, 5000);
-                await autoDeleteMessage(chatId, message.message_id, env, 5000);
+                ctx.waitUntil(autoDeleteMessage(chatId, tgResponse.result.message_id, env, 5000));
+                ctx.waitUntil(autoDeleteMessage(chatId, message.message_id, env, 5000));
             }
         })(),
     );
