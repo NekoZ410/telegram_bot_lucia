@@ -31,6 +31,11 @@ const escapeTgHtml = (text) => {
 
 // helper: fbfix - fetch facebook og url and media list
 export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
+    const DEBUG_PARSE = false;
+    const DEBUG_MEDIA = false;
+    let debugParseText = "";
+    let debugMediaText = "";
+
     try {
         // ===== setup =====
         const response = await fetch(inputUrl, {
@@ -65,18 +70,55 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
         if (!finalUrl) return { text: "❌ Không tìm thấy URL hợp lệ.", url: null, mediaUrls: [] };
 
         // ===== parse original url =====
+        let isTransformed = false;
         try {
-            const parsedUrl = new URL(finalUrl);
-            if (parsedUrl.pathname.includes("story.php") || parsedUrl.pathname.includes("permalink.php")) {
-                const storyId = parsedUrl.searchParams.get("story_fbid");
-                const pageId = parsedUrl.searchParams.get("id");
-                if (storyId && pageId) finalUrl = `https://www.facebook.com/${pageId}/posts/${storyId}/`;
-            }
+            let parsedUrl = new URL(finalUrl);
             parsedUrl.searchParams.delete("rdid");
             parsedUrl.searchParams.delete("share_url");
             finalUrl = parsedUrl.toString();
+
+            if (parsedUrl.pathname.includes("story.php") || parsedUrl.pathname.includes("permalink.php")) {
+                const storyId = parsedUrl.searchParams.get("story_fbid");
+                const pageId = parsedUrl.searchParams.get("id");
+                if (storyId && pageId) {
+                    finalUrl = `https://www.facebook.com/${pageId}/posts/${storyId}/`;
+                    isTransformed = true;
+                }
+            }
         } catch (err) {}
+
         if (finalUrl.includes("facebook.com/login")) return { text: "❌ Không thể lấy được URL gốc do nguồn cấp là nhóm kín.", url: null, mediaUrls: [] };
+
+        // refecth if rewritten
+        if (isTransformed) {
+            try {
+                // DEBUG: print transformed url
+                if (DEBUG_PARSE) debugParseText += `\n\n🔍 <b>[DEBUG PARSE]</b>\n- <b>URL Kích hoạt Re-fetch:</b> <code>${finalUrl}</code>`;
+
+                const refectResponse = await fetch(finalUrl, {
+                    method: "GET",
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+                        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+                    },
+                    redirect: "follow",
+                });
+
+                // DEBUG: print refetch result
+                if (DEBUG_PARSE) debugParseText += `\n- <b>HTTP Status:</b> ${refectResponse.status}\n- <b>URL Trả về thực tế:</b> <code>${refectResponse.url}</code>`;
+                if (refectResponse.ok) {
+                    html = await refectResponse.text();
+
+                    if (DEBUG_PARSE) {
+                        debugParseText += `\n- <b>Độ lớn HTML (Re-fetch):</b> ${html.length} bytes`;
+                        if (refectResponse.url.includes("/login")) debugParseText += `\n- ⚠️ <b>CẢNH BÁO:</b> Re-fetch đã bị Facebook chặn và ép chuyển sang trang đăng nhập!`;
+                    }
+                }
+            } catch (e) {
+                if (DEBUG_PARSE) debugParseText += `\n- ❌ <b>Re-fetch thất bại:</b> ${e.message}`;
+            }
+        }
 
         // ===== fetch media =====
         const mediaUrls = [];
@@ -122,6 +164,16 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             if (validIds.length > 0) {
                 const finalUrls = validIds.map((id) => `https://lookaside.fbsbx.com/lookaside/crawler/media/?media_id=${id}`); // using lookaside api
                 mediaUrls.push(...finalUrls);
+
+                // DEBUG: print media fetch info
+                if (DEBUG_MEDIA) {
+                    debugMediaText += `\n\n🛠 <b>[DEBUG MEDIA] (API Fetch Mode)</b>\n`;
+                    debugMediaText += `- Tổng số ID Hợp lệ quét được: ${validIds.length} IDs\n`;
+                    debugMediaText += `- <b>Danh sách URL đã chốt (Tối đa 10):</b>`;
+                    mediaUrls.forEach((url, idx) => {
+                        debugMediaText += `\n- Ảnh ${idx + 1}: ${escapeTgHtml(url)}`;
+                    });
+                }
             }
             // else, fallback to og:image
             else if (ogImage) {
@@ -136,7 +188,7 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
         let time = "Không rõ";
 
         if (html) {
-            // get author by deep scanning
+            // get author: deep regex scanning
             const authorJsonMatch =
                 html.match(/"video_owner":\{[^}]*?"name":"([^"]+)"/i) ||
                 html.match(/"owning_profile":\{[^}]*?"name":"([^"]+)"/i) ||
@@ -154,6 +206,7 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
                 html.match(/"name":"([^"]+)","__isProfile"/i);
             if (authorJsonMatch && authorJsonMatch[1]) author = decodeFbEntities(authorJsonMatch[1]);
 
+            // get author: looking for title
             if (author === "Không rõ") {
                 const titleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
                 if (titleMatch) {
@@ -176,19 +229,25 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
                 }
             }
 
+            // get author: looking for group name
             if (finalUrl.includes("/groups/")) {
-                const groupJsonMatch = html.match(/"group":\{"__typename":"Group","id":"[^"]+","name":"([^"]+)"/i);
+                const groupJsonMatch =
+                    html.match(/"group"\s*:\s*\{[^}]*?"name"\s*:\s*"([^"]+)"/i) ||
+                    html.match(/"__typename"\s*:\s*"Group"(?:[^}]*?)"name"\s*:\s*"([^"]+)"/i) ||
+                    html.match(/"group_name"\s*:\s*"([^"]+)"/i);
+
                 if (groupJsonMatch && groupJsonMatch[1]) {
                     const groupName = decodeFbEntities(groupJsonMatch[1]);
-                    if (author !== "Không rõ" && author !== groupName) {
-                        author = `${author} | ${groupName}`;
-                    } else {
+
+                    if (author !== "Không rõ" && author !== groupName && !author.includes(groupName)) {
+                        author = `${author} • ${groupName}`;
+                    } else if (author === "Không rõ") {
                         author = groupName;
                     }
                 }
             }
 
-            // get caption by choosing the longest one
+            // get caption: choosing the longest one
             let captionCandidates = [];
             const descMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
             let baseCaption = "";
@@ -202,6 +261,7 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
                 .substring(0, 20)
                 .trim();
 
+            // get caption: looking for title tag
             const titleTagMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
             if (titleTagMatch) {
                 let titleText = decodeFbEntities(titleTagMatch[1]).trim();
@@ -214,6 +274,7 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
                 }
             }
 
+            // get caption: decoding message
             const messageRegex = /"message":\s*\{\s*"text":\s*"((?:[^"\\]|\\.)*)"\s*\}/gi;
             let msgMatch;
             while ((msgMatch = messageRegex.exec(html)) !== null) {
@@ -223,6 +284,17 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             if (captionCandidates.length > 0) {
                 caption = captionCandidates.reduce((a, b) => (a.length > b.length ? a : b), "");
                 caption = caption.replace(/@(?=\S)/g, "@ ").replace(/#(?=\S)/g, "# ");
+
+                if (author && author !== "Không rõ") {
+                    const authorParts = author.split(" • ");
+                    for (const part of authorParts) {
+                        const escapedPart = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // escape special characters
+                        const startRegex = new RegExp(`^${escapedPart}\\s*[-|:,]?\\s*`, "i"); // remove author, at the beginning
+                        const endRegex = new RegExp(`\\s*[-|:,]?\\s*${escapedPart}$`, "i"); // remove author, at the end
+                        caption = caption.replace(startRegex, "").replace(endRegex, "").trim();
+                    }
+                    caption = caption.replace(/^[-|:,]\s*/, ""); // remove leading punctuation
+                }
             }
 
             // get timestamp
@@ -277,6 +349,15 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             if (shares > 0) interactionArr.push(`${shares.toLocaleString("vi-VN")} ↪️`);
 
             if (interactionArr.length > 0) interactions = interactionArr.join(" • ");
+
+            // DEBUG: print metadata fetch info
+            if (DEBUG_PARSE) {
+                debugParseText +=
+                    `\n- <b>Tác giả/Nguồn:</b> ${author}` +
+                    `\n- <b>Nội dung (Độ dài):</b> ${caption.length} ký tự` +
+                    `\n- <b>Thời gian:</b> ${time}` +
+                    `\n- <b>Tương tác:</b> ${interactions}`;
+            }
         }
 
         // ===== render results =====
@@ -310,6 +391,10 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
 
             if (isTruncated) resultText += truncationMsg;
         }
+
+        // add debug info
+        if (DEBUG_PARSE && debugParseText) resultText += debugParseText;
+        if (DEBUG_MEDIA && debugMediaText) resultText += debugMediaText;
 
         return { text: resultText, url: finalUrl, mediaUrls: mediaUrls, ogImage: ogImage };
     } catch (error) {
