@@ -36,17 +36,19 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
     let debugParseText = "";
     let debugMediaText = "";
 
+    const fetchSettings = {
+        method: "GET",
+        headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+        },
+        redirect: "follow",
+    };
+
     try {
-        // ===== setup =====
-        const response = await fetch(inputUrl, {
-            method: "GET",
-            headers: {
-                "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-            },
-            redirect: "follow",
-        });
+        // ===== initial fetch =====
+        const response = await fetch(inputUrl, fetchSettings);
 
         // ===== fetch original url =====
         let finalUrl = response.url;
@@ -95,15 +97,7 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
                 // DEBUG: print transformed url
                 if (DEBUG_PARSE) debugParseText += `\n\n🔍 <b>[DEBUG PARSE]</b>\n- <b>URL Kích hoạt Re-fetch:</b> <code>${finalUrl}</code>`;
 
-                const refectResponse = await fetch(finalUrl, {
-                    method: "GET",
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-                        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-                    },
-                    redirect: "follow",
-                });
+                const refectResponse = await fetch(finalUrl, fetchSettings);
 
                 // DEBUG: print refetch result
                 if (DEBUG_PARSE) debugParseText += `\n- <b>HTTP Status:</b> ${refectResponse.status}\n- <b>URL Trả về thực tế:</b> <code>${refectResponse.url}</code>`;
