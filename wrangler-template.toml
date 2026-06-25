@@ -1,0 +1,23 @@
+name = "telegram-bot-lucia"
+main = "src/index.js"
+compatibility_date = "2026-03-24"
+compatibility_flags = [ "nodejs_compat" ]
+
+[vars]
+# Real Telegram bot token will set via cmd: wrangler secret put TELEGRAM_BOT_TOKEN
+
+[[d1_databases]]
+binding = "db_name"
+database_name = "db-name"
+database_id = "db-id"
+
+[[kv_namespaces]]
+binding = "kv_name"
+id = "kv-id"
+
+[browser]
+binding = "BROWSER"
+
+# [[vpc_networks]]
+# binding = "vpc_name"
+# network_id = "vpc-network"
