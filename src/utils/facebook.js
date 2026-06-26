@@ -48,38 +48,60 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
 
     try {
         // ===== initial fetch =====
+        // DEBUG: print pre-fetch info
+        if (DEBUG_NETWORK) debugNetworkText += `\n\n🌐 <b>[DEBUG NETWORK]</b>\n- <b>Input URL:</b> <a href="${escapeTgHtml(inputUrl)}">INPUT URL</a>`;
+
         const response = await fetch(inputUrl, fetchSettings);
 
-        // ===== fetch original url =====
+        // ===== process & standardize original url =====
         let finalUrl = response.url;
         let html = "";
-        // if encounter login page and has next param, try next param
+        let needsRefetch = false;
+
+        // process response
         if (finalUrl.includes("/login/") && finalUrl.includes("next=")) {
+            // DEBUG: print post-fetch info
+            if (DEBUG_NETWORK) debugNetworkText += `\n- <b>Fetch response:</b> [${response.status}] | Force login (with next param)`;
+
             try {
                 const urlObj = new URL(finalUrl);
                 const nextParam = urlObj.searchParams.get("next");
-                if (nextParam) finalUrl = decodeURIComponent(nextParam);
+                if (nextParam) {
+                    finalUrl = decodeURIComponent(nextParam);
+                    needsRefetch = true;
+
+                    // DEBUG: print post-fetch info
+                    if (DEBUG_NETWORK) debugNetworkText += ` | <a href="${escapeTgHtml(finalUrl)}">FETCHED URL</a>`;
+                }
             } catch (e) {}
-        }
-        // else, do normal parsing
-        else {
+        } else {
             html = await response.text();
 
-            // catch og:url or link:rel=canonical
+            // DEBUG: print post-fetch info
+            if (DEBUG_NETWORK) {
+                debugNetworkText += `\n- <b>Fetch response:</b> [${response.status}] | ${(html.length / 1024).toFixed(1)} KB`;
+                if (finalUrl !== inputUrl) debugNetworkText += ` | <a href="${escapeTgHtml(finalUrl)}">FETCHED URL</a>`;
+            }
+
             const ogUrlMatch =
                 html.match(/<meta[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["']/i) ||
                 html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:url["']/i) ||
                 html.match(/<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["']/i) ||
                 html.match(/<link[^>]*href=["']([^"']+)["'][^>]*rel=["']canonical["']/i);
 
-            if (ogUrlMatch && ogUrlMatch[1]) finalUrl = ogUrlMatch[1].replace(/&amp;/g, "&");
+            if (ogUrlMatch && ogUrlMatch[1]) {
+                const newUrl = ogUrlMatch[1].replace(/&amp;/g, "&");
+                if (newUrl.includes("facebook.com") && newUrl !== finalUrl) {
+                    finalUrl = newUrl;
 
-            if (ogUrlMatch) finalUrl = ogUrlMatch[1].replace(/&amp;/g, "&");
+                    // DEBUG: print prioritized url if found
+                    if (DEBUG_NETWORK) debugNetworkText += `\n- <b>Prioritized URL (og:url/link:rel=canonical):</b> <a href="${escapeTgHtml(finalUrl)}">PRIORITIZED URL</a>`;
+                }
+            }
         }
         if (!finalUrl) return { text: "❌ Không tìm thấy URL hợp lệ.", url: null, mediaUrls: [] };
 
-        // ===== parse original url =====
-        let isTransformed = false;
+        // standardize url
         try {
             let parsedUrl = new URL(finalUrl);
             parsedUrl.searchParams.delete("rdid");
@@ -91,32 +113,31 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
                 const pageId = parsedUrl.searchParams.get("id");
                 if (storyId && pageId) {
                     finalUrl = `https://www.facebook.com/${pageId}/posts/${storyId}/`;
-                    isTransformed = true;
+                    needsRefetch = true;
                 }
             }
         } catch (err) {}
-
         if (finalUrl.includes("facebook.com/login")) return { text: "❌ Không thể lấy được URL gốc do nguồn cấp là nhóm kín.", url: null, mediaUrls: [] };
 
-        // refecth if rewritten
-        if (isTransformed) {
+        // refecth if needed
+        if (needsRefetch) {
             try {
                 // DEBUG: print pre-refetch info
-                if (DEBUG_NETWORK) debugNetworkText += `\n\n🌐 <b>[DEBUG NETWORK]</b>\n- <b>Re-fetch:</b> <a href="${finalUrl}">REFETCH TRIGGER URL</a>`;
+                if (DEBUG_NETWORK) debugNetworkText += `\n- <b>Refetch input URL:</b> <a href="${escapeTgHtml(finalUrl)}">REFETCH INPUT URL</a>`;
 
                 const refetchResponse = await fetch(finalUrl, fetchSettings);
                 if (refetchResponse.ok) {
                     html = await refetchResponse.text();
 
-                    // DEBUG: print post-refetch response
+                    // DEBUG: print post-refetch info
                     if (DEBUG_NETWORK) {
-                        const isSuccess = refetchResponse.status >= 200 && refetchResponse.status < 300;
-                        const isBlocked = refetchResponse.url.includes("/login");
-
-                        debugNetworkText +=
-                            isSuccess ?
-                                `\n- <b>Thành công:</b> <a href="${refetchResponse.url}">REFETCH RESPONSE URL</a> | [${refetchResponse.status}] | ${html.length} B`
-                            :   `\n- <b>Thất bại:</b> ${isBlocked ? "⚠️ Bị FB chặn/ép đăng nhập" : "Lỗi kết nối"} | [${refetchResponse.status}] | ${html.length} B`;
+                        debugNetworkText += `\n- <b>Refetch response:</b> [${refetchResponse.status}] | ${(html.length / 1024).toFixed(1)} KB`;
+                        if (refetchResponse.url !== finalUrl) {
+                            debugNetworkText += ` | <a href="${escapeTgHtml(refetchResponse.url)}">REFETCHED URL</a>`;
+                        } else {
+                            debugNetworkText += ` | REFETCHED URL = FETCHED URL`;
+                        }
+                        if (refetchResponse.url.includes("/login")) debugNetworkText += `\n- ⚠️ <b>CẢNH BÁO:</b> Lần 2 đã bị Facebook chặn và ép đăng nhập!`;
                     }
 
                     // catch og:url or link:rel=canonical
@@ -128,16 +149,18 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
 
                     if (reFetchOgMatch && reFetchOgMatch[1]) {
                         const newUrl = reFetchOgMatch[1].replace(/&amp;/g, "&");
-                        if (newUrl.includes("facebook.com") && !newUrl.includes("story.php")) {
+                        if (newUrl.includes("facebook.com") && !newUrl.includes("story.php") && newUrl !== finalUrl) {
                             finalUrl = newUrl;
 
-                            // DEBUG: print priotized url if found
-                            if (DEBUG_NETWORK) debugNetworkText += `\n- <b>URL ưu tiên (og:url / link:rel=canonical):</b> <a href="${finalUrl}">PRIOTIZED URL</a>`;
+                            // DEBUG: print prioritized url if found
+                            if (DEBUG_NETWORK)
+                                debugNetworkText += `\n- <b>Prioritized URL (og:url/link:rel=canonical):</b> <a href="${escapeTgHtml(finalUrl)}">PRIORITIZED URL</a>`;
                         }
                     }
                 }
             } catch (e) {
-                if (DEBUG_PARSE) debugParseText += `\n- ❌ <b>Re-fetch thất bại:</b> ${e.message}`;
+                // DEBUG: print error
+                if (DEBUG_NETWORK) debugNetworkText += `\n- ❌ <b>Fetch Lần 2 thất bại:</b> ${escapeTgHtml(e.message)}`;
             }
         }
 
