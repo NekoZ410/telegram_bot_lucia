@@ -31,10 +31,12 @@ const escapeTgHtml = (text) => {
 
 // helper: fbfix - fetch facebook og url and media list
 export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
-    const DEBUG_PARSE = false;
+    const DEBUG_NETWORK = false;
     const DEBUG_MEDIA = false;
-    let debugParseText = "";
+    const DEBUG_METADATA = false;
+    let debugNetworkText = "";
     let debugMediaText = "";
+    let debugMetadataText = "";
 
     const fetchSettings = {
         method: "GET",
@@ -64,8 +66,15 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
         // else, do normal parsing
         else {
             html = await response.text();
+
+            // catch og:url or link:rel=canonical
             const ogUrlMatch =
-                html.match(/<meta[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["']/i) || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:url["']/i);
+                html.match(/<meta[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["']/i) ||
+                html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:url["']/i) ||
+                html.match(/<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["']/i) ||
+                html.match(/<link[^>]*href=["']([^"']+)["'][^>]*rel=["']canonical["']/i);
+
+            if (ogUrlMatch && ogUrlMatch[1]) finalUrl = ogUrlMatch[1].replace(/&amp;/g, "&");
 
             if (ogUrlMatch) finalUrl = ogUrlMatch[1].replace(/&amp;/g, "&");
         }
@@ -94,19 +103,39 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
         // refecth if rewritten
         if (isTransformed) {
             try {
-                // DEBUG: print transformed url
-                if (DEBUG_PARSE) debugParseText += `\n\n🔍 <b>[DEBUG PARSE]</b>\n- <b>URL Kích hoạt Re-fetch:</b> <code>${finalUrl}</code>`;
+                // DEBUG: print pre-refetch info
+                if (DEBUG_NETWORK) debugNetworkText += `\n\n🌐 <b>[DEBUG NETWORK]</b>\n- <b>Re-fetch:</b> <a href="${finalUrl}">REFETCH TRIGGER URL</a>`;
 
-                const refectResponse = await fetch(finalUrl, fetchSettings);
+                const refetchResponse = await fetch(finalUrl, fetchSettings);
+                if (refetchResponse.ok) {
+                    html = await refetchResponse.text();
 
-                // DEBUG: print refetch result
-                if (DEBUG_PARSE) debugParseText += `\n- <b>HTTP Status:</b> ${refectResponse.status}\n- <b>URL Trả về thực tế:</b> <code>${refectResponse.url}</code>`;
-                if (refectResponse.ok) {
-                    html = await refectResponse.text();
+                    // DEBUG: print post-refetch response
+                    if (DEBUG_NETWORK) {
+                        const isSuccess = refetchResponse.status >= 200 && refetchResponse.status < 300;
+                        const isBlocked = refetchResponse.url.includes("/login");
 
-                    if (DEBUG_PARSE) {
-                        debugParseText += `\n- <b>Độ lớn HTML (Re-fetch):</b> ${html.length} bytes`;
-                        if (refectResponse.url.includes("/login")) debugParseText += `\n- ⚠️ <b>CẢNH BÁO:</b> Re-fetch đã bị Facebook chặn và ép chuyển sang trang đăng nhập!`;
+                        debugNetworkText +=
+                            isSuccess ?
+                                `\n- <b>Thành công:</b> <a href="${refetchResponse.url}">REFETCH RESPONSE URL</a> | [${refetchResponse.status}] | ${html.length} B`
+                            :   `\n- <b>Thất bại:</b> ${isBlocked ? "⚠️ Bị FB chặn/ép đăng nhập" : "Lỗi kết nối"} | [${refetchResponse.status}] | ${html.length} B`;
+                    }
+
+                    // catch og:url or link:rel=canonical
+                    const reFetchOgMatch =
+                        html.match(/<meta[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["']/i) ||
+                        html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:url["']/i) ||
+                        html.match(/<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["']/i) ||
+                        html.match(/<link[^>]*href=["']([^"']+)["'][^>]*rel=["']canonical["']/i);
+
+                    if (reFetchOgMatch && reFetchOgMatch[1]) {
+                        const newUrl = reFetchOgMatch[1].replace(/&amp;/g, "&");
+                        if (newUrl.includes("facebook.com") && !newUrl.includes("story.php")) {
+                            finalUrl = newUrl;
+
+                            // DEBUG: print priotized url if found
+                            if (DEBUG_NETWORK) debugNetworkText += `\n- <b>URL ưu tiên (og:url / link:rel=canonical):</b> <a href="${finalUrl}">PRIOTIZED URL</a>`;
+                        }
                     }
                 }
             } catch (e) {
@@ -161,12 +190,19 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
 
                 // DEBUG: print media fetch info
                 if (DEBUG_MEDIA) {
-                    debugMediaText += `\n\n🛠 <b>[DEBUG MEDIA] (API Fetch Mode)</b>\n`;
-                    debugMediaText += `- Tổng số ID Hợp lệ quét được: ${validIds.length} IDs\n`;
-                    debugMediaText += `- <b>Danh sách URL đã chốt (Tối đa 10):</b>`;
-                    mediaUrls.forEach((url, idx) => {
-                        debugMediaText += `\n- Ảnh ${idx + 1}: ${escapeTgHtml(url)}`;
+                    debugMediaText = `\n\n🖼 <b>[DEBUG MEDIA]</b>\n` + `- <b>Số ID hợp lệ:</b> ${validIds.length}\n` + `- <b>Danh sách URL (max 10):</b>\n`;
+
+                    const chunks = [];
+                    for (let i = 0; i < mediaUrls.length; i += 5) chunks.push(mediaUrls.slice(i, i + 5)); // chunks of 5
+                    const rows = chunks.map((chunk, chunkIdx) => {
+                        return chunk
+                            .map((url, idx) => {
+                                const globalIdx = chunkIdx * 5 + idx + 1;
+                                return `<a href="${escapeTgHtml(url)}">ẢNH ${globalIdx}</a>`;
+                            })
+                            .join(" | ");
                     });
+                    debugMediaText += rows.join("\n");
                 }
             }
             // else, fallback to og:image
@@ -345,10 +381,11 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             if (interactionArr.length > 0) interactions = interactionArr.join(" • ");
 
             // DEBUG: print metadata fetch info
-            if (DEBUG_PARSE) {
-                debugParseText +=
+            if (DEBUG_METADATA) {
+                debugMetadataText +=
+                    `\n\n🪪 <b>[DEBUG METADATA]</b>` +
                     `\n- <b>Tác giả/Nguồn:</b> ${author}` +
-                    `\n- <b>Nội dung (Độ dài):</b> ${caption.length} ký tự` +
+                    `\n- <b>Nội dung:</b> ${caption.length} ký tự` +
                     `\n- <b>Thời gian:</b> ${time}` +
                     `\n- <b>Tương tác:</b> ${interactions}`;
             }
@@ -387,8 +424,9 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
         }
 
         // add debug info
-        if (DEBUG_PARSE && debugParseText) resultText += debugParseText;
+        if (DEBUG_NETWORK && debugNetworkText) resultText += debugNetworkText;
         if (DEBUG_MEDIA && debugMediaText) resultText += debugMediaText;
+        if (DEBUG_METADATA && debugMetadataText) resultText += debugMetadataText;
 
         return { text: resultText, url: finalUrl, mediaUrls: mediaUrls, ogImage: ogImage };
     } catch (error) {
