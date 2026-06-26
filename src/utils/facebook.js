@@ -33,10 +33,8 @@ const escapeTgHtml = (text) => {
 export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
     const DEBUG_NETWORK = false;
     const DEBUG_MEDIA = false;
-    const DEBUG_METADATA = false;
     let debugNetworkText = "";
     let debugMediaText = "";
-    let debugMetadataText = "";
 
     const fetchSettings = {
         method: "GET",
@@ -379,16 +377,6 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             if (shares > 0) interactionArr.push(`${shares.toLocaleString("vi-VN")} ↪️`);
 
             if (interactionArr.length > 0) interactions = interactionArr.join(" • ");
-
-            // DEBUG: print metadata fetch info
-            if (DEBUG_METADATA) {
-                debugMetadataText +=
-                    `\n\n🪪 <b>[DEBUG METADATA]</b>` +
-                    `\n- <b>Tác giả/Nguồn:</b> ${author}` +
-                    `\n- <b>Nội dung:</b> ${caption.length} ký tự` +
-                    `\n- <b>Thời gian:</b> ${time}` +
-                    `\n- <b>Tương tác:</b> ${interactions}`;
-            }
         }
 
         // ===== render results =====
@@ -426,7 +414,6 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
         // add debug info
         if (DEBUG_NETWORK && debugNetworkText) resultText += debugNetworkText;
         if (DEBUG_MEDIA && debugMediaText) resultText += debugMediaText;
-        if (DEBUG_METADATA && debugMetadataText) resultText += debugMetadataText;
 
         return { text: resultText, url: finalUrl, mediaUrls: mediaUrls, ogImage: ogImage };
     } catch (error) {
