@@ -99,7 +99,7 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
                             :   "❌ Lỗi không xác định khi tải nội dung. Mạng không ổn định hoặc facebook đã đổi thuật toán!\n\n<b>[Thông báo sẽ tự động xoá sau 5s.]</b>";
                         const payload = {
                             chat_id: chatId,
-                            text: `${errorMsg}\n\n<b>[Thông báo sẽ tự động xoá sau 5s.]</b>`,
+                            text: `${errorMsg}`,
                             parse_mode: "HTML",
                             reply_parameters: { message_id: message.message_id },
                         };
