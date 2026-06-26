@@ -211,7 +211,7 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
 
                 // DEBUG: print media fetch info
                 if (DEBUG_MEDIA) {
-                    debugMediaText = `\n\n🖼 <b>[DEBUG MEDIA]</b>\n` + `- <b>Số ID hợp lệ:</b> ${validIds.length}\n` + `- <b>Danh sách URL (max 10):</b>\n`;
+                    debugMediaText = `\n\n🖼 <b>[DEBUG MEDIA]</b>\n` + `- <b>Valid IDs:</b> ${validIds.length}\n` + `- <b>Image URL list (max 10):</b>\n`;
 
                     const chunks = [];
                     for (let i = 0; i < mediaUrls.length; i += 5) chunks.push(mediaUrls.slice(i, i + 5)); // chunks of 5
@@ -219,7 +219,7 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
                         return chunk
                             .map((url, idx) => {
                                 const globalIdx = chunkIdx * 5 + idx + 1;
-                                return `<a href="${escapeTgHtml(url)}">ẢNH ${globalIdx}</a>`;
+                                return `<a href="${escapeTgHtml(url)}">IMAGE ${globalIdx}</a>`;
                             })
                             .join(" | ");
                     });
