@@ -3,7 +3,7 @@ import { callTelegramApi, autoDeleteMessage, setReaction } from "../utils/telegr
 
 export async function handleFbfix({ env, ctx, chatId, threadId, message, args }) {
     if (args) {
-        const urlRegex = /(?:https?:\/\/)?(?:www\.)?facebook\.com\/[^\s]+/i;
+        const urlRegex = /(https?:\/\/(?:[\w-]+\.)?(?:facebook\.com|fb\.watch|fb\.com)\/[^\s\n\r"']+)/i;
         const matchUrl = args.match(urlRegex);
 
         if (matchUrl) {
@@ -21,7 +21,7 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
             // ===== send message based on post type =====
             ctx.waitUntil(
                 (async () => {
-                    ctx.waitUntil(setReaction(chatId, message.message_id, "👌", env)); // feedback reaction
+                    await setReaction(chatId, message.message_id, "👌", env); // feedback reaction
 
                     try {
                         let userDisplay = null;
@@ -73,7 +73,10 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
                             if (!isMediaSentSuccess && result.ogImage) {
                                 let fallbackCaption = result.text;
                                 if (quotaText) fallbackCaption += quotaText;
-                                if (tgErrorLog) fallbackCaption += `\n\n⚠️ <b>[Lỗi Lấy Video]:</b> <code>${escapeTgHtml(tgErrorLog)}</code>`;
+                                if (tgErrorLog) {
+                                    const safeErr = tgErrorLog.length > 200 ? tgErrorLog.substring(0, 200) + "..." : tgErrorLog;
+                                    fallbackCaption += `\n\n⚠️ <b>[Lỗi Lấy Video]:</b> <code>${escapeTgHtml(safeErr)}</code>`;
+                                }
 
                                 const payload = {
                                     chat_id: chatId,
@@ -119,6 +122,11 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
 
                         // if post have only 1 image, 0 image, or error => parsed url + metadata
                         if (!isMediaSentSuccess) {
+                            if (tgErrorLog) {
+                                const safeErr = tgErrorLog.length > 200 ? tgErrorLog.substring(0, 200) + "..." : tgErrorLog;
+                                result.text += `\n\n⚠️ <b>[Lỗi Gửi Media]:</b> <code>${escapeTgHtml(safeErr)}</code>`;
+                            }
+
                             const sendPayload = {
                                 chat_id: chatId,
                                 text: result.text,
@@ -139,7 +147,7 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
                             if (jsonResponse && !jsonResponse.ok) throw new Error(`Telegram Error: ${jsonResponse.description}`); // if fallback fails, throw error
                         }
 
-                        if (tgErrorLog) ctx.waitUntil(setReaction(chatId, message.message_id, "🥺", env)); // feedback reaction
+                        if (tgErrorLog) ctx.waitUntil(setReaction(chatId, message.message_id, "😢", env)); // feedback reaction
                     } catch (e) {
                         await setReaction(chatId, message.message_id, "😭", env); // feedback reaction
 
@@ -171,11 +179,11 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
     // when no args
     ctx.waitUntil(
         (async () => {
-            await setReaction(chatId, message.message_id, "🥺", env); // feedback reaction
+            await setReaction(chatId, message.message_id, "😢", env); // feedback reaction
 
             const payload = {
                 chat_id: chatId,
-                text: "⚠️ Vui lòng sử dụng cú pháp:\n<code>/fbfix &lt;facebookUrl&gt;</code>\n<code>/fbfix@uruha_lucia_bot &lt;facebookUrl&gt;</code>\n\n<b>[Thông báo sẽ tự động xoá sau 5s.]</b>",
+                text: "⚠️ <b>Không tìm thấy link Facebook hợp lệ!</b>\n\nVui lòng sử dụng cú pháp:\n<code>/testfbfix &lt;facebookUrl&gt;</code>\n<code>/testfbfix@uruha_lucia_bot &lt;facebookUrl&gt;</code>\n\n<b>[Thông báo sẽ tự động xoá sau 5s.]</b>",
                 parse_mode: "HTML",
                 reply_parameters: { message_id: message.message_id },
             };

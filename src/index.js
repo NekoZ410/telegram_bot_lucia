@@ -24,7 +24,9 @@ export default {
 
             chatId = message.chat.id;
             threadId = message.is_topic_message ? message.message_thread_id : null;
-            const text = message.text.trim();
+
+            const text = (message.text || message.caption || "").trim();
+            if (!text) return new Response("OK", { status: 200 });
 
             if (text.startsWith("/")) {
                 const BOT_USERNAME = "uruha_lucia_bot";
@@ -45,6 +47,8 @@ export default {
                 ctx.waitUntil(
                     (async () => {
                         try {
+                            await setReaction(chatId, message.message_id, "😭", env); // feedback reaction
+
                             const payload = {
                                 chat_id: chatId,
                                 text: `❌ <b>[Cảnh báo Hệ thống Bot]</b>\nĐã xảy ra lỗi đồng bộ nghiêm trọng tại Router!\n\n<b>Chi tiết lỗi:</b> <code>${e.message}</code>\n<i>Vui lòng kiểm tra lại log Cloudflare Console nếu cần xem stack trace.</i>`,

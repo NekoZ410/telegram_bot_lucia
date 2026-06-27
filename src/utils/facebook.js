@@ -141,7 +141,11 @@ export const fetchVideoWithFallback = async (videoUrl, env) => {
 
         try {
             const requestData = api.buildRequest(videoUrl, env);
-            const response = await fetch(requestData.url, requestData.options);
+            const fetchOptions = {
+                ...requestData.options,
+                signal: AbortSignal.timeout(4500),
+            };
+            const response = await fetch(requestData.url, fetchOptions);
 
             // quota check
             const limitHeader = response.headers.get("x-ratelimit-requests-limit") || response.headers.get("x-ratelimit-limit");
@@ -212,6 +216,7 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
         },
         redirect: "follow",
+        signal: AbortSignal.timeout(6000),
     };
 
     try {
@@ -591,13 +596,14 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             // calculate and determine available space
             const telegramMaxLimit = willSendAsMedia ? 1024 : 4096; // text = 4096, media = 1024
             const reservedQuotaTextLength = isReel ? 50 : 0;
+            const reservedErrorTextLength = 250;
 
             const visibleResultTextLength = getVisibleLength(resultText);
             const visibleDebugTextLength = getVisibleLength(debugTextTotal);
             const visibleCaptionTextLength = getVisibleLength(captionText);
             const visibleTruncationMsgLength = getVisibleLength(truncationMsg);
 
-            const otherTextLength = visibleResultTextLength + visibleDebugTextLength + visibleCaptionTextLength + visibleTruncationMsgLength + 15 + reservedQuotaTextLength;
+            const otherTextLength = visibleResultTextLength + visibleDebugTextLength + visibleCaptionTextLength + visibleTruncationMsgLength + 15 + reservedQuotaTextLength + reservedErrorTextLength;
             const availableSpace = telegramMaxLimit - otherTextLength;
             const maxLength = Math.max(0, Math.floor(availableSpace / 25) * 25); // using nearest multiple of 25
 
