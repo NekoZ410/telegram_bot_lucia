@@ -29,6 +29,18 @@ const escapeTgHtml = (text) => {
         .replace(/>/g, "&gt;");
 };
 
+// helper: get visible length of a string
+const getVisibleLength = (htmlStr) => {
+    if (!htmlStr) return 0;
+    let plain = htmlStr.replace(/<[^>]*>?/gm, "");
+    return plain
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'").length;
+};
+
 const GET_VIDEO_APIS = [
     {
         name: "ig-scraper-api", // 10 reqs/month
@@ -578,9 +590,14 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
 
             // calculate and determine available space
             const telegramMaxLimit = willSendAsMedia ? 1024 : 4096; // text = 4096, media = 1024
-            const reservedQuotaText = isReel ? 60 : 0;
+            const reservedQuotaTextLength = isReel ? 50 : 0;
 
-            const otherTextLength = resultText.length + contentText.length + truncationMsg.length + 15 + reservedQuotaText + debugTextTotal.length;
+            const visibleResultTextLength = getVisibleLength(resultText);
+            const visibleDebugTextLength = getVisibleLength(debugTextTotal);
+            const visibleCaptionTextLength = getVisibleLength(captionText);
+            const visibleTruncationMsgLength = getVisibleLength(truncationMsg);
+
+            const otherTextLength = visibleResultTextLength + visibleDebugTextLength + visibleCaptionTextLength + visibleTruncationMsgLength + 15 + reservedQuotaTextLength;
             const availableSpace = telegramMaxLimit - otherTextLength;
             const maxLength = Math.max(0, Math.floor(availableSpace / 25) * 25); // using nearest multiple of 25
 
@@ -591,7 +608,7 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
                 safeCaption = caption.substring(0, maxLength) + "...";
                 isTruncated = true;
             }
-            resultText += `${contentText}\n<i>${escapeTgHtml(safeCaption)}</i>`;
+            resultText += `${captionText}\n<i>${escapeTgHtml(safeCaption)}</i>`;
 
             if (isTruncated) resultText += truncationMsg;
         }
