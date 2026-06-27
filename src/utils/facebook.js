@@ -29,7 +29,163 @@ const escapeTgHtml = (text) => {
         .replace(/>/g, "&gt;");
 };
 
-// helper: fbfix - fetch facebook og url and media list
+const GET_VIDEO_APIS = [
+    {
+        name: "ig-scraper-api", // 10 reqs/month
+        buildRequest: (videoUrl, env) => {
+            const url = new URL("https://instagram-scraper-api-stories-reels-va-post.p.rapidapi.com/");
+            url.searchParams.append("url", videoUrl);
+            return {
+                url: url.toString(),
+                options: {
+                    method: "GET",
+                    headers: {
+                        "x-rapidapi-key": env.RAPIDAPI_KEY,
+                        "x-rapidapi-host": "instagram-scraper-api-stories-reels-va-post.p.rapidapi.com",
+                        "Content-Type": "application/json",
+                    },
+                },
+            };
+        },
+    },
+    {
+        name: "ig-downloader", // 50 reqs/month
+        buildRequest: (videoUrl, env) => {
+            const url = new URL("https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi");
+            url.searchParams.append("url", videoUrl);
+            return {
+                url: url.toString(),
+                options: {
+                    method: "GET",
+                    headers: {
+                        "x-rapidapi-key": env.RAPIDAPI_KEY,
+                        "x-rapidapi-host": "instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com",
+                        "Content-Type": "application/json",
+                    },
+                },
+            };
+        },
+    },
+    {
+        name: "fb-media-api", // 100 reqs/month
+        buildRequest: (videoUrl, env) => {
+            return {
+                url: "https://facebook-media-api.p.rapidapi.com/media/html",
+                options: {
+                    method: "POST",
+                    headers: {
+                        "x-rapidapi-key": env.RAPIDAPI_KEY,
+                        "x-rapidapi-host": "facebook-media-api.p.rapidapi.com",
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ url: videoUrl, cookie: "" }),
+                },
+            };
+        },
+    },
+    {
+        name: "snap-video3", // 100 reqs/month
+        buildRequest: (videoUrl, env) => {
+            return {
+                url: "https://snap-video3.p.rapidapi.com/download",
+                options: {
+                    method: "POST",
+                    headers: {
+                        "x-rapidapi-key": env.RAPIDAPI_KEY,
+                        "x-rapidapi-host": "snap-video3.p.rapidapi.com",
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ url: videoUrl, "shortcuts-json-format": false }),
+                },
+            };
+        },
+    },
+    {
+        name: "fastsaver", // => ~500 reqs/month (1000 credits/month, fb cost 2)
+        buildRequest: (videoUrl, env) => {
+            const url = new URL("https://api.fastsaver.io/v1/fetch");
+            url.searchParams.append("url", videoUrl);
+            return {
+                url: url.toString(),
+                options: {
+                    method: "GET",
+                    headers: {
+                        "X-Api-Key": env.FASTSAVER_API_KEY,
+                    },
+                },
+            };
+        },
+    },
+];
+
+// helper: fetch video from api
+export const fetchVideoWithFallback = async (videoUrl, env) => {
+    let errorLogs = [];
+    const totalApis = GET_VIDEO_APIS.length;
+
+    for (let i = 0; i < totalApis; i++) {
+        const api = GET_VIDEO_APIS[i];
+        const attemptNum = i + 1;
+
+        try {
+            const requestData = api.buildRequest(videoUrl, env);
+            const response = await fetch(requestData.url, requestData.options);
+
+            // quota check
+            const limitHeader = response.headers.get("x-ratelimit-requests-limit") || response.headers.get("x-ratelimit-limit");
+            const remainingHeader = response.headers.get("x-ratelimit-requests-remaining") || response.headers.get("x-ratelimit-remaining");
+            let quotaInfo = {
+                name: api.name,
+                limit: limitHeader ? parseInt(limitHeader) : "N/A",
+                remaining: remainingHeader ? parseInt(remainingHeader) : "N/A",
+                used: limitHeader && remainingHeader ? parseInt(limitHeader) - parseInt(remainingHeader) : "N/A",
+                attempt: attemptNum,
+                total: totalApis,
+            };
+            if (quotaInfo.remaining !== "N/A" && quotaInfo.remaining <= 0) {
+                errorLogs.push(`Quota Exceeded (${api.name})`);
+                continue;
+            }
+
+            // error check
+            if (!response.ok) {
+                let errorText = await response.text();
+                if (errorText.length > 500) errorText = errorText.substring(0, 500) + "...";
+                errorLogs.push(`[${response.status}] ${errorText} (${api.name})`);
+                continue;
+            }
+
+            // JSON decoder
+            const data = await response.json();
+            let foundUrl = null;
+            // prioritize "medias" array
+            if (data.medias && Array.isArray(data.medias) && data.medias.length > 0) {
+                const videos = data.medias.filter((m) => m.type !== "audio");
+                const targetList = videos.length > 0 ? videos : data.medias;
+                const hdVideo = targetList.find((m) => m.quality && m.quality.toLowerCase().includes("hd"));
+                foundUrl = hdVideo ? hdVideo.url : targetList[0].url;
+            }
+            // use specific fields
+            else if (data.download_url) foundUrl = data.download_url;
+            else if (data.video_url) foundUrl = data.video_url;
+            else if (data.data && data.data.hd) foundUrl = data.data.hd;
+            else if (data.data && data.data.video) foundUrl = data.data.video;
+            else if (data.data && data.data.url) foundUrl = data.data.url;
+            else if (data.links && Array.isArray(data.links) && data.links.length > 0) foundUrl = data.links[0].url || data.links[0].link;
+            // use common fields
+            else if (data.url && typeof data.url === "string" && data.url !== videoUrl) foundUrl = data.url;
+
+            if (foundUrl) return { url: foundUrl, error: null, quota: quotaInfo };
+            errorLogs.push(`Unknown JSON (${api.name}): ${JSON.stringify(data).substring(0, 100)}`);
+        } catch (error) {
+            errorLogs.push(`Lỗi Mạng: ${error.message} (${api.name})`);
+        }
+    }
+
+    return { url: null, error: errorLogs.join(" -> "), quota: null };
+};
+
+// helper: fetch facebook og url and media list
 export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
     const DEBUG_NETWORK = false;
     const DEBUG_MEDIA = false;
@@ -417,8 +573,9 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             const willSendAsMedia = (isReel && ogImage) || (!isReel && mediaUrls.length > 1);
 
             // calculate and determine available space
-            const telegramMaxLimit = willSendAsMedia ? 1024 : 4096; // image = 1024, text = 4096
-            const otherTextLength = resultText.length + contentText.length + truncationMsg.length + 15;
+            const telegramMaxLimit = willSendAsMedia ? 1024 : 4096; // text = 4096, media = 1024
+            const reservedQuotaText = isReel ? 60 : 0;
+            const otherTextLength = resultText.length + contentText.length + truncationMsg.length + 15 + reservedQuotaText;
             const availableSpace = telegramMaxLimit - otherTextLength;
             const maxLength = Math.floor(availableSpace / 25) * 25; // using nearest multiple of 25
 

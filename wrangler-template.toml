@@ -5,6 +5,8 @@ compatibility_flags = [ "nodejs_compat" ]
 
 [vars]
 # Real Telegram bot token will set via cmd: wrangler secret put TELEGRAM_BOT_TOKEN
+RAPIDAPI_KEY = "rapidapi_key"
+FASTSAVER_API_KEY = "fastsaver_api_key"
 
 [[d1_databases]]
 binding = "db_name"

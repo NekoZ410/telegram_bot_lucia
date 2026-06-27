@@ -1,4 +1,4 @@
-import { fetchFacebookOgUrl } from "../utils/facebook.js";
+import { fetchFacebookOgUrl, fetchVideoWithFallback } from "../utils/facebook.js";
 import { callTelegramApi, autoDeleteMessage, setReaction } from "../utils/telegram.js";
 
 export async function handleFbfix({ env, ctx, chatId, threadId, message, args }) {
@@ -29,22 +29,70 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
                         if (result.text.includes("❌")) throw new Error(result.text); // if fetch fails, throw error
 
                         let isMediaSentSuccess = false;
+                        let tgErrorLog = "";
                         const isReel = result.url && (result.url.includes("/reel/") || result.url.includes("/watch/") || result.url.includes("/videos/")); // check if it's a video
 
-                        // if post is a video => parsed url + metadata + og:image (preview replacement)
-                        if (isReel && result.ogImage) {
-                            const payload = {
-                                chat_id: chatId,
-                                photo: result.ogImage,
-                                caption: result.text,
-                                parse_mode: "HTML",
-                                reply_parameters: { message_id: message.message_id },
-                            };
-                            if (threadId) payload.message_thread_id = threadId;
+                        // if post is a video => video from api, or parsed url + metadata + og:image (preview replacement)
+                        if (isReel) {
+                            // if video fetch succeeds, send video
+                            const videoResult = await fetchVideoWithFallback(result.url, env);
 
-                            let tgResponse = await callTelegramApi("sendPhoto", payload, env);
-                            let jsonResponse = typeof tgResponse.json === "function" ? await tgResponse.json() : tgResponse;
-                            if (jsonResponse && jsonResponse.ok) isMediaSentSuccess = true;
+                            let quotaText = "";
+                            if (videoResult.quota) {
+                                const q = videoResult.quota;
+                                const limitStr = q.limit !== "N/A" ? `/${q.limit}` : "";
+                                quotaText = `\n\n📊 ${q.name} quota: Used ${q.used}${limitStr} (${q.attempt}/${q.total})`;
+                            }
+
+                            if (videoResult.url) {
+                                let videoCaption = result.text;
+                                if (quotaText) videoCaption += quotaText;
+
+                                const payload = {
+                                    chat_id: chatId,
+                                    video: videoResult.url,
+                                    caption: videoCaption,
+                                    parse_mode: "HTML",
+                                    reply_parameters: { message_id: message.message_id },
+                                };
+                                if (threadId) payload.message_thread_id = threadId;
+
+                                let tgResponse = await callTelegramApi("sendVideo", payload, env);
+                                let jsonResponse = typeof tgResponse.json === "function" ? await tgResponse.json() : tgResponse;
+
+                                if (jsonResponse && jsonResponse.ok) {
+                                    isMediaSentSuccess = true;
+                                } else if (jsonResponse && !jsonResponse.ok) {
+                                    tgErrorLog = `Telegram sendVideo Error: ${jsonResponse.description}`;
+                                }
+                            } else {
+                                tgErrorLog = `Video API Error: ${videoResult.error}`;
+                            }
+
+                            // if video fetch fails, send image from og:image
+                            if (!isMediaSentSuccess && result.ogImage) {
+                                let fallbackCaption = result.text;
+                                if (quotaText) fallbackCaption += quotaText;
+                                if (tgErrorLog) fallbackCaption += `\n\n⚠️ <b>[Lỗi Lấy Video]:</b> <code>${escapeTgHtml(tgErrorLog)}</code>`;
+
+                                const payload = {
+                                    chat_id: chatId,
+                                    photo: result.ogImage,
+                                    caption: fallbackCaption,
+                                    parse_mode: "HTML",
+                                    reply_parameters: { message_id: message.message_id },
+                                };
+                                if (threadId) payload.message_thread_id = threadId;
+
+                                let tgResponse = await callTelegramApi("sendPhoto", payload, env);
+                                let jsonResponse = typeof tgResponse.json === "function" ? await tgResponse.json() : tgResponse;
+
+                                if (jsonResponse && jsonResponse.ok) {
+                                    isMediaSentSuccess = true;
+                                } else if (jsonResponse && !jsonResponse.ok) {
+                                    tgErrorLog += ` | Telegram sendPhoto Error: ${jsonResponse.description}`;
+                                }
+                            }
                         }
                         // if post with multiple images => parsed url + metadata + images group
                         else if (!isReel && result.mediaUrls && result.mediaUrls.length > 1) {
