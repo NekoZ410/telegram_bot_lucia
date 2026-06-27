@@ -574,7 +574,7 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
         const authorText = `${prefix}👤 <b>Nguồn:</b> <a href="${escapeTgHtml(finalUrl)}">${escapeTgHtml(author)}</a>\n`;
         const timestampText = time !== "Không rõ" ? `🕒 <b>Thời gian:</b> ${escapeTgHtml(time)}\n` : "";
         const interactionsText = interactions !== "Không rõ" ? `❤️ <b>Tương tác:</b> ${escapeTgHtml(interactions)}\n` : "";
-        const contentText = "📝 <b>Nội dung:</b>";
+        const captionText = "📝 <b>Nội dung:</b>";
         const truncationMsg = "\n\n<b>[Nội dung bị thu gọn do giới hạn của Telegram]</b>";
 
         // accumulate debug text
