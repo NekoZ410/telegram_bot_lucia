@@ -516,10 +516,10 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
 
             // get interactions
             let interactionArr = [];
-            let likes = 0,
-                comments = 0,
-                shares = 0,
-                views = 0;
+            let likes = null,
+                comments = null,
+                shares = null,
+                views = null;
 
             const likeLD = html.match(/"interactionType":\s*"https?:\/\/schema\.org\/LikeAction"[^}]+?"userInteractionCount":\s*(\d+)/i);
             if (likeLD) likes = parseInt(likeLD[1]);
@@ -530,31 +530,30 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             const shareLD = html.match(/"interactionType":\s*"https?:\/\/schema\.org\/ShareAction"[^}]+?"userInteractionCount":\s*(\d+)/i);
             if (shareLD) shares = parseInt(shareLD[1]);
 
-            if (likes === 0) {
+            if (likes === null) {
                 const reactionMatch = html.match(/"reaction_count":\s*\{\s*"count":\s*(\d+)/i) || html.match(/"like_count":\s*\{\s*"count":\s*(\d+)/i);
                 if (reactionMatch) likes = parseInt(reactionMatch[1]);
             }
-            if (comments === 0) {
+            if (comments === null) {
                 const commentMatch =
                     html.match(/"comments":\s*\{\s*"total_count":\s*(\d+)/i) ||
                     html.match(/"comment_count":\s*\{\s*"total_count":\s*(\d+)/i) ||
                     html.match(/"total_comment_count":\s*(\d+)/i);
                 if (commentMatch) comments = parseInt(commentMatch[1]);
             }
-            if (shares === 0) {
+            if (shares === null) {
                 const shareMatch = html.match(/"share_count":\s*\{\s*"count":\s*(\d+)/i);
                 if (shareMatch) shares = parseInt(shareMatch[1]);
             }
-            if (views === 0) {
+            if (views === null) {
                 const viewMatch = html.match(/"play_count":\s*(\d+)/i) || html.match(/"video_view_count":\s*(\d+)/i);
                 if (viewMatch) views = parseInt(viewMatch[1]);
             }
 
-            if (views > 0) interactionArr.push(`${views.toLocaleString("vi-VN")} 👁️`);
-            if (likes > 0) interactionArr.push(`${likes.toLocaleString("vi-VN")} ✋`);
-            if (comments > 0) interactionArr.push(`${comments.toLocaleString("vi-VN")} 💬`);
-            if (shares > 0) interactionArr.push(`${shares.toLocaleString("vi-VN")} ↪️`);
-
+            if (views !== null) interactionArr.push(`${views.toLocaleString("vi-VN")} 👁️`);
+            if (likes !== null) interactionArr.push(`${likes.toLocaleString("vi-VN")} ✋`);
+            if (comments !== null) interactionArr.push(`${comments.toLocaleString("vi-VN")} 💬`);
+            if (shares !== null) interactionArr.push(`${shares.toLocaleString("vi-VN")} ↪️`);
             if (interactionArr.length > 0) interactions = interactionArr.join(" • ");
         }
 
