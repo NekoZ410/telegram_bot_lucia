@@ -1,14 +1,14 @@
 import { handleStart } from "./commands/cmd_start.js";
 import { handleInfo } from "./commands/cmd_info.js";
 import { handleFbfix } from "./commands/cmd_fbfix.js";
-import { handleTest } from "./commands/cmd_test.js";
+import { handleTestfbfix } from "./commands/cmd_testfbfix.js";
 import { callTelegramApi } from "./utils/telegram.js";
 
 const COMMAND_ROUTER = {
     start: handleStart,
     info: handleInfo,
     fbfix: handleFbfix,
-    test: handleTest,
+    testfbfix: handleTestfbfix,
 };
 
 export default {
