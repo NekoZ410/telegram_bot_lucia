@@ -138,6 +138,8 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
 
                             if (jsonResponse && !jsonResponse.ok) throw new Error(`Telegram Error: ${jsonResponse.description}`); // if fallback fails, throw error
                         }
+
+                        if (tgErrorLog) ctx.waitUntil(setReaction(chatId, message.message_id, "🥺", env)); // feedback reaction
                     } catch (e) {
                         await setReaction(chatId, message.message_id, "😭", env); // feedback reaction
 
@@ -169,7 +171,7 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
     // when no args
     ctx.waitUntil(
         (async () => {
-            await setReaction(chatId, message.message_id, "👆", env); // feedback reaction
+            await setReaction(chatId, message.message_id, "🥺", env); // feedback reaction
 
             const payload = {
                 chat_id: chatId,
