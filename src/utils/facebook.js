@@ -565,6 +565,11 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
         const contentText = "📝 <b>Nội dung:</b>";
         const truncationMsg = "\n\n<b>[Nội dung bị thu gọn do giới hạn của Telegram]</b>";
 
+        // accumulate debug text
+        let debugTextTotal = "";
+        if (DEBUG_NETWORK && debugNetworkText) debugTextTotal += debugNetworkText;
+        if (DEBUG_MEDIA && debugMediaText) debugTextTotal += debugMediaText;
+
         let resultText = `${authorText}${timestampText}${interactionsText}`;
         if (caption) {
             // identify post type
@@ -574,9 +579,10 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             // calculate and determine available space
             const telegramMaxLimit = willSendAsMedia ? 1024 : 4096; // text = 4096, media = 1024
             const reservedQuotaText = isReel ? 60 : 0;
-            const otherTextLength = resultText.length + contentText.length + truncationMsg.length + 15 + reservedQuotaText;
+
+            const otherTextLength = resultText.length + contentText.length + truncationMsg.length + 15 + reservedQuotaText + debugTextTotal.length;
             const availableSpace = telegramMaxLimit - otherTextLength;
-            const maxLength = Math.floor(availableSpace / 25) * 25; // using nearest multiple of 25
+            const maxLength = Math.max(0, Math.floor(availableSpace / 25) * 25); // using nearest multiple of 25
 
             let isTruncated = false;
             let safeCaption = caption;
@@ -590,9 +596,8 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             if (isTruncated) resultText += truncationMsg;
         }
 
-        // add debug info
-        if (DEBUG_NETWORK && debugNetworkText) resultText += debugNetworkText;
-        if (DEBUG_MEDIA && debugMediaText) resultText += debugMediaText;
+        // add debug text
+        resultText += debugTextTotal;
 
         return { text: resultText, url: finalUrl, mediaUrls: mediaUrls, ogImage: ogImage };
     } catch (error) {
