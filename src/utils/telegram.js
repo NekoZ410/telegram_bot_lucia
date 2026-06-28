@@ -33,3 +33,10 @@ export const setReaction = async (chatId, messageId, emoji, env) => {
         env,
     );
 };
+
+// helper: create inline keyboard
+export const createInlineKeyboard = (buttonRows) => {
+    return {
+        inline_keyboard: buttonRows,
+    };
+};

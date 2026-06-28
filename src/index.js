@@ -2,6 +2,7 @@ import { handleStart } from "./commands/cmd_start.js";
 import { handleInfo } from "./commands/cmd_info.js";
 import { handleFbfix } from "./commands/cmd_fbfix.js";
 import { handleTestfbfix } from "./commands/cmd_testfbfix.js";
+import { handleHelp } from "./commands/cmd_help.js";
 import { callTelegramApi } from "./utils/telegram.js";
 
 const COMMAND_ROUTER = {
@@ -9,6 +10,7 @@ const COMMAND_ROUTER = {
     info: handleInfo,
     fbfix: handleFbfix,
     testfbfix: handleTestfbfix,
+    help: handleHelp,
 };
 
 export default {
@@ -19,6 +21,28 @@ export default {
         let threadId = null;
         try {
             const update = await request.json();
+
+            // handle callback message
+            if (update.callback_query) {
+                const cbQuery = update.callback_query;
+                const cbData = cbQuery.data;
+                const cbChatId = cbQuery.message.chat.id;
+                const cbBotMsgId = cbQuery.message.message_id;
+
+                if (cbData.startsWith("del_msg|")) {
+                    const triggerMsgId = cbData.split("|")[1];
+                    ctx.waitUntil(
+                        (async () => {
+                            await callTelegramApi("answerCallbackQuery", { callback_query_id: cbQuery.id }, env);
+                            await callTelegramApi("deleteMessage", { chat_id: cbChatId, message_id: cbBotMsgId }, env);
+                            if (triggerMsgId) await callTelegramApi("deleteMessage", { chat_id: cbChatId, message_id: triggerMsgId }, env);
+                        })(),
+                    );
+                }
+                return new Response("OK", { status: 200 });
+            }
+
+            // handle normal message
             const message = update.message || update.edited_message;
             if (!message || !message.text) return new Response("OK", { status: 200 });
 
