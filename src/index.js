@@ -3,6 +3,7 @@ import { handleInfo } from "./commands/cmd_info.js";
 import { handleFbfix } from "./commands/cmd_fbfix.js";
 import { handleTestfbfix } from "./commands/cmd_testfbfix.js";
 import { handleHelp } from "./commands/cmd_help.js";
+import { handleQr } from "./commands/cmd_qr.js";
 import { callTelegramApi } from "./utils/telegram.js";
 
 const COMMAND_ROUTER = {
@@ -11,6 +12,7 @@ const COMMAND_ROUTER = {
     fbfix: handleFbfix,
     testfbfix: handleTestfbfix,
     help: handleHelp,
+    qr: handleQr,
 };
 
 export default {
@@ -44,7 +46,7 @@ export default {
 
             // handle normal message
             const message = update.message || update.edited_message;
-            if (!message || !message.text) return new Response("OK", { status: 200 });
+            if (!message) return new Response("OK", { status: 200 });
 
             chatId = message.chat.id;
             threadId = message.is_topic_message ? message.message_thread_id : null;

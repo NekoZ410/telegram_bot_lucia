@@ -8,6 +8,15 @@ export const callTelegramApi = async (method, payload, env) => {
     });
 };
 
+// helper: call telegram api with multipart
+export const callTelegramApiMultipart = async (method, formData, env) => {
+    const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`;
+    return fetch(url, {
+        method: "POST",
+        body: formData,
+    });
+};
+
 // helper: auto delete messages
 export const autoDeleteMessage = async (chatId, messageId, env, delayMs = 5000) => {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
