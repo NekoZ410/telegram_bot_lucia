@@ -1,20 +1,15 @@
 // main: call telegram api
 export const callTelegramApi = async (method, payload, env) => {
     const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`;
-    return fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-    });
-};
 
-// helper: call telegram api with multipart
-export const callTelegramApiMultipart = async (method, formData, env) => {
-    const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`;
-    return fetch(url, {
+    const isFormData = payload instanceof FormData;
+    const options = {
         method: "POST",
-        body: formData,
-    });
+        body: isFormData ? payload : JSON.stringify(payload),
+    };
+    if (!isFormData) options.headers = { "Content-Type": "application/json" };
+
+    return fetch(url, options);
 };
 
 // helper: auto delete messages

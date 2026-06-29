@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { callTelegramApi, callTelegramApiMultipart, setReaction, autoDeleteMessage, escapeTgHtml } from "../utils/telegram.js";
+import { callTelegramApi, setReaction, autoDeleteMessage, escapeTgHtml } from "../utils/telegram.js";
 
 export async function handleQr({ env, ctx, chatId, threadId, message, args }) {
     if (args) {
@@ -98,7 +98,7 @@ export async function handleQr({ env, ctx, chatId, threadId, message, args }) {
                     formData.append("photo", blob, "qrcode.png");
 
                     // send response
-                    const tgResponse = await callTelegramApiMultipart("sendPhoto", formData, env);
+                    const tgResponse = await callTelegramApi("sendPhoto", formData, env);
                     const jsonResponse = await tgResponse.json();
 
                     if (!jsonResponse.ok) throw new Error(`Lỗi gửi ảnh Telegram: ${jsonResponse.description}`);
