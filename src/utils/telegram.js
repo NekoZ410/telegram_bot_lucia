@@ -18,7 +18,7 @@ export const callTelegramApiMultipart = async (method, formData, env) => {
 };
 
 // helper: auto delete messages
-export const autoDeleteMessage = async (chatId, messageId, env, delayMs = 5000) => {
+export const autoDeleteMessage = async (chatId, messageId, env, delayMs = 10000) => {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     await callTelegramApi(
         "deleteMessage",
