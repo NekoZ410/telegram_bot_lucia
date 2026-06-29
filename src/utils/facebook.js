@@ -1,5 +1,5 @@
 // helper: decode HTML entities and JSON unicode escapes
-const decodeFbEntities = (str) => {
+export const decodeFbEntities = (str) => {
     if (!str) return "";
     let decoded = str
         .replace(/\\u([0-9a-fA-F]{4})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16))) // unicode escapes
@@ -21,7 +21,7 @@ const decodeFbEntities = (str) => {
 };
 
 // helper: escape HTML specifically for Telegram parse_mode
-const escapeTgHtml = (text) => {
+export const escapeTgHtml = (text) => {
     if (!text) return "";
     return text
         .replace(/&(?!amp;|lt;|gt;|quot;|apos;)/g, "&amp;")
@@ -30,7 +30,7 @@ const escapeTgHtml = (text) => {
 };
 
 // helper: get visible length of a string
-const getVisibleLength = (htmlStr) => {
+export const getVisibleLength = (htmlStr) => {
     if (!htmlStr) return 0;
     let plain = htmlStr.replace(/<[^>]*>?/gm, "");
     return plain
@@ -41,7 +41,7 @@ const getVisibleLength = (htmlStr) => {
         .replace(/&apos;/g, "'").length;
 };
 
-const GET_VIDEO_APIS = [
+export const GET_VIDEO_APIS = [
     {
         name: "ig-scraper-api", // 10 reqs/month
         buildRequest: (videoUrl, env) => {
@@ -174,12 +174,14 @@ export const fetchVideoWithFallback = async (videoUrl, env) => {
             // JSON decoder
             const data = await response.json();
             let foundUrl = null;
+            let selectedMedia = null;
             // prioritize "medias" array
             if (data.medias && Array.isArray(data.medias) && data.medias.length > 0) {
                 const videos = data.medias.filter((m) => m.type !== "audio");
                 const targetList = videos.length > 0 ? videos : data.medias;
                 const hdVideo = targetList.find((m) => m.quality && m.quality.toLowerCase().includes("hd"));
-                foundUrl = hdVideo ? hdVideo.url : targetList[0].url;
+                selectedMedia = hdVideo ? hdVideo : targetList[0];
+                foundUrl = selectedMedia.url;
             }
             // use specific fields
             else if (data.download_url) foundUrl = data.download_url;
@@ -191,7 +193,24 @@ export const fetchVideoWithFallback = async (videoUrl, env) => {
             // use common fields
             else if (data.url && typeof data.url === "string" && data.url !== videoUrl) foundUrl = data.url;
 
-            if (foundUrl) return { url: foundUrl, error: null, quota: quotaInfo };
+            // determine video size
+            let sizeBytes = 0;
+            // approximate by duration and bitrate from response first
+            let duration = data.duration || (data.data && data.data.duration) || 0;
+            if (duration > 1000) duration = duration / 1000; // Đổi ms sang giây nếu cần
+            let bitrate = selectedMedia ? selectedMedia.bitrate || 0 : 0;
+            if (duration > 0 && bitrate > 0) sizeBytes = (duration * bitrate) / 8;
+
+            // fallback to content length
+            if (sizeBytes === 0 && foundUrl) {
+                try {
+                    const headRes = await fetch(foundUrl, { method: "HEAD", signal: AbortSignal.timeout(3000) });
+                    const contentLength = headRes.headers.get("content-length");
+                    if (contentLength) sizeBytes = parseInt(contentLength, 10);
+                } catch (e) {}
+            }
+
+            if (foundUrl) return { url: foundUrl, error: null, quota: quotaInfo, size: sizeBytes };
             errorLogs.push(`Unknown JSON (${api.name}): ${JSON.stringify(data).substring(0, 100)}`);
         } catch (error) {
             errorLogs.push(`Lỗi Mạng: ${error.message} (${api.name})`);
@@ -376,6 +395,13 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
                 }
             }
 
+            if (validIds.length === 0) {
+                const idMatchInUrl = finalUrl.match(/\/(\d{14,18})(?:\/|\?|$)/);
+                if (idMatchInUrl && idMatchInUrl[1]) {
+                    validIds.push(idMatchInUrl[1]);
+                }
+            }
+
             validIds = [...new Set(validIds)].slice(0, 10); // remove duplication and limit at first 10 images
             // if post has multiple images
             if (validIds.length > 0) {
@@ -473,10 +499,14 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
 
             // get caption: choosing the longest one
             let captionCandidates = [];
-            const descMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
+            const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
+            const metaDescMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
             let baseCaption = "";
-            if (descMatch) {
-                baseCaption = decodeFbEntities(descMatch[1]).trim();
+            if (ogDescMatch && ogDescMatch[1]) {
+                baseCaption = decodeFbEntities(ogDescMatch[1]).trim();
+                captionCandidates.push(baseCaption);
+            } else if (metaDescMatch && metaDescMatch[1]) {
+                baseCaption = decodeFbEntities(metaDescMatch[1]).trim();
                 captionCandidates.push(baseCaption);
             }
 
@@ -603,7 +633,14 @@ export const fetchFacebookOgUrl = async (inputUrl, userDisplayContext = "") => {
             const visibleCaptionTextLength = getVisibleLength(captionText);
             const visibleTruncationMsgLength = getVisibleLength(truncationMsg);
 
-            const otherTextLength = visibleResultTextLength + visibleDebugTextLength + visibleCaptionTextLength + visibleTruncationMsgLength + 15 + reservedQuotaTextLength + reservedErrorTextLength;
+            const otherTextLength =
+                visibleResultTextLength +
+                visibleDebugTextLength +
+                visibleCaptionTextLength +
+                visibleTruncationMsgLength +
+                15 +
+                reservedQuotaTextLength +
+                reservedErrorTextLength;
             const availableSpace = telegramMaxLimit - otherTextLength;
             const maxLength = Math.max(0, Math.floor(availableSpace / 25) * 25); // using nearest multiple of 25
 

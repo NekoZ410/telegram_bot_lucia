@@ -1,4 +1,4 @@
-import { fetchFacebookOgUrl, fetchVideoWithFallback } from "../utils/facebook.js";
+import { fetchFacebookOgUrl, fetchVideoWithFallback, escapeTgHtml } from "../utils/facebook.js";
 import { callTelegramApi, autoDeleteMessage, setReaction } from "../utils/telegram.js";
 
 export async function handleFbfix({ env, ctx, chatId, threadId, message, args }) {
@@ -30,58 +30,79 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
 
                         let isMediaSentSuccess = false;
                         let tgErrorLog = "";
-                        const isReel = result.url && (result.url.includes("/reel/") || result.url.includes("/watch/") || result.url.includes("/videos/")); // check if it's a video
+
+                        const isReel =
+                            (result.url && (result.url.includes("/reel/") || result.url.includes("/watch/") || result.url.includes("/videos/"))) ||
+                            (matchUrl[0] &&
+                                (matchUrl[0].includes("/reel/") ||
+                                    matchUrl[0].includes("/watch/") ||
+                                    matchUrl[0].includes("/videos/") ||
+                                    matchUrl[0].includes("/share/v/") ||
+                                    matchUrl[0].includes("/share/r/")));
 
                         // if post is a video => video from api, or parsed url + metadata + og:image (preview replacement)
                         if (isReel) {
-                            // if video fetch succeeds, send video
-                            const videoResult = await fetchVideoWithFallback(result.url, env);
+                            const apiResult = await fetchVideoWithFallback(matchUrl[0], env);
 
                             let quotaText = "";
-                            if (videoResult.quota) {
-                                const q = videoResult.quota;
+                            if (apiResult.quota) {
+                                const q = apiResult.quota;
                                 const limitStr = q.limit !== "N/A" ? `/${q.limit}` : "";
                                 quotaText = `\n\n📊 ${q.name} quota: Used ${q.used}${limitStr} (${q.attempt}/${q.total})`;
                             }
 
-                            if (videoResult.url) {
-                                let videoCaption = result.text;
-                                if (quotaText) videoCaption += quotaText;
+                            let finalCaption = result.text;
+                            if (apiResult.url) {
+                                finalCaption = finalCaption.replace(/(👤 <b>Nguồn:<\/b> <a href="[^"]+">.*?<\/a>)/, `$1 | <a href="${escapeTgHtml(apiResult.url)}">MEDIA</a>`);
+                            }
+                            if (quotaText) finalCaption += quotaText;
 
-                                const payload = {
-                                    chat_id: chatId,
-                                    video: videoResult.url,
-                                    caption: videoCaption,
-                                    parse_mode: "HTML",
-                                    reply_parameters: { message_id: message.message_id },
-                                };
-                                if (threadId) payload.message_thread_id = threadId;
+                            const MAX_TG_SIZE = 50 * 1024 * 1024; // upload limit for bots = 50MB
+                            // if video size < 50MB, send video
+                            if (apiResult.url) {
+                                if (apiResult.size > 0 && apiResult.size < MAX_TG_SIZE) {
+                                    const payload = {
+                                        chat_id: chatId,
+                                        text: finalCaption,
+                                        parse_mode: "HTML",
+                                        reply_parameters: { message_id: message.message_id },
+                                        link_preview_options: {
+                                            is_disabled: false,
+                                            prefer_large_media: true,
+                                            url: apiResult.url,
+                                        },
+                                    };
+                                    if (threadId) payload.message_thread_id = threadId;
 
-                                let tgResponse = await callTelegramApi("sendVideo", payload, env);
-                                let jsonResponse = typeof tgResponse.json === "function" ? await tgResponse.json() : tgResponse;
+                                    let tgResponse = await callTelegramApi("sendMessage", payload, env);
+                                    let jsonResponse = typeof tgResponse.json === "function" ? await tgResponse.json() : tgResponse;
 
-                                if (jsonResponse && jsonResponse.ok) {
-                                    isMediaSentSuccess = true;
-                                } else if (jsonResponse && !jsonResponse.ok) {
-                                    tgErrorLog = `Telegram sendVideo Error: ${jsonResponse.description}`;
+                                    if (jsonResponse && jsonResponse.ok) {
+                                        isMediaSentSuccess = true;
+                                    } else {
+                                        tgErrorLog = `Telegram SendMedia Error: ${jsonResponse.description}`;
+                                    }
+                                } else {
+                                    const sizeStr = apiResult.size > 0 ? `${(apiResult.size / 1024 / 1024).toFixed(2)}MB` : "Unknown";
+                                    tgErrorLog = `Media Size Limit Exceeded / Unknown (${sizeStr}). Triggering Photo Fallback.`;
                                 }
                             } else {
-                                tgErrorLog = `Video API Error: ${videoResult.error}`;
+                                tgErrorLog = `Media API Error: ${apiResult.error}`;
                             }
 
-                            // if video fetch fails, send image from og:image
-                            if (!isMediaSentSuccess && result.ogImage) {
-                                let fallbackCaption = result.text;
-                                if (quotaText) fallbackCaption += quotaText;
+                            // if video > 50MB or fetch fails, send photo + encapsulated video url
+                            const fallbackImage = result.ogImage || (result.mediaUrls && result.mediaUrls.length > 0 ? result.mediaUrls[0] : null);
+                            if (!isMediaSentSuccess && fallbackImage) {
+                                let photoCaption = finalCaption;
                                 if (tgErrorLog) {
                                     const safeErr = tgErrorLog.length > 200 ? tgErrorLog.substring(0, 200) + "..." : tgErrorLog;
-                                    fallbackCaption += `\n\n⚠️ <b>[Lỗi Lấy Video]:</b> <code>${escapeTgHtml(safeErr)}</code>`;
+                                    photoCaption += `\n\n⚠️ <b>[Lỗi Lấy Video]:</b> <code>${escapeTgHtml(safeErr)}</code>`;
                                 }
 
                                 const payload = {
                                     chat_id: chatId,
-                                    photo: result.ogImage,
-                                    caption: fallbackCaption,
+                                    photo: fallbackImage,
+                                    caption: photoCaption,
                                     parse_mode: "HTML",
                                     reply_parameters: { message_id: message.message_id },
                                 };
@@ -122,14 +143,19 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
 
                         // if post have only 1 image, 0 image, or error => parsed url + metadata
                         if (!isMediaSentSuccess) {
+                            let fallbackText =
+                                isReel ?
+                                    result.text.replace(/(👤 <b>Nguồn:<\/b> <a href="[^"]+">.*?<\/a>)/, `$1 | <a href="${escapeTgHtml(matchUrl[0])}">VIDEO</a>`)
+                                :   result.text;
+
                             if (tgErrorLog) {
                                 const safeErr = tgErrorLog.length > 200 ? tgErrorLog.substring(0, 200) + "..." : tgErrorLog;
-                                result.text += `\n\n⚠️ <b>[Lỗi Gửi Media]:</b> <code>${escapeTgHtml(safeErr)}</code>`;
+                                fallbackText += `\n\n⚠️ <b>[Lỗi Gửi Media]:</b> <code>${escapeTgHtml(safeErr)}</code>`;
                             }
 
                             const sendPayload = {
                                 chat_id: chatId,
-                                text: result.text,
+                                text: fallbackText,
                                 parse_mode: "HTML",
                                 reply_parameters: { message_id: message.message_id },
                             };
@@ -138,7 +164,7 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
                             sendPayload.link_preview_options = {
                                 is_disabled: false,
                                 prefer_large_media: true,
-                                ...(result.url && { url: result.url }), // url will be included if result.url valid
+                                ...(result.url && { url: result.url }),
                             };
 
                             let tgResponse = await callTelegramApi("sendMessage", sendPayload, env);
@@ -183,7 +209,12 @@ export async function handleFbfix({ env, ctx, chatId, threadId, message, args })
 
             const payload = {
                 chat_id: chatId,
-                text: "⚠️ <b>Không tìm thấy link Facebook hợp lệ!</b>\n\nVui lòng sử dụng cú pháp:\n<code>/testfbfix &lt;facebookUrl&gt;</code>\n<code>/testfbfix@uruha_lucia_bot &lt;facebookUrl&gt;</code>\n\n<b>[Thông báo sẽ tự động xoá sau 5s.]</b>",
+                text:
+                    `⚠️ <b>Sai cú pháp!</b>\n\n` +
+                    `Vui lòng sử dụng cú pháp:\n` +
+                    `<code>/testfbfix &lt;facebookUrl&gt;</code>\n` +
+                    `<code>/testfbfix@uruha_lucia_bot &lt;facebookUrl&gt;</code>\n\n` +
+                    `<b>[Thông báo sẽ tự động xoá sau 5s.]</b>`,
                 parse_mode: "HTML",
                 reply_parameters: { message_id: message.message_id },
             };
