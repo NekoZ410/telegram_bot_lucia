@@ -1,5 +1,5 @@
-import { fetchFacebookOgUrl, fetchVideoWithFallback, escapeTgHtml } from "../utils/facebook.js";
-import { callTelegramApi, autoDeleteMessage, setReaction } from "../utils/telegram.js";
+import { fetchFacebookOgUrl, fetchVideoWithFallback } from "../utils/facebook.js";
+import { callTelegramApi, autoDeleteMessage, setReaction, escapeTgHtml } from "../utils/telegram.js";
 
 export async function handleFbfix({ env, ctx, chatId, threadId, message, args }) {
     if (args) {

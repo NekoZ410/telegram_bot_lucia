@@ -1,3 +1,5 @@
+import { escapeTgHtml } from "./telegram.js";
+
 // helper: decode HTML entities and JSON unicode escapes
 export const decodeFbEntities = (str) => {
     if (!str) return "";
@@ -18,15 +20,6 @@ export const decodeFbEntities = (str) => {
         .replace(/&lt;/g, "<")
         .replace(/&gt;/g, ">")
         .replace(/&amp;/g, "&");
-};
-
-// helper: escape HTML specifically for Telegram parse_mode
-export const escapeTgHtml = (text) => {
-    if (!text) return "";
-    return text
-        .replace(/&(?!amp;|lt;|gt;|quot;|apos;)/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
 };
 
 // helper: get visible length of a string

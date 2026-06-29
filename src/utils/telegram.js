@@ -40,3 +40,12 @@ export const createInlineKeyboard = (buttonRows) => {
         inline_keyboard: buttonRows,
     };
 };
+
+// helper: escape HTML specifically for Telegram parse_mode
+export const escapeTgHtml = (text) => {
+    if (!text) return "";
+    return text
+        .replace(/&(?!amp;|lt;|gt;|quot;|apos;)/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+};
